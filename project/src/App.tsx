@@ -7,6 +7,7 @@ import { Auth } from './pages/Auth';
 import { CreateWorld } from './pages/CreateWorld';
 import { WorldDashboard } from './pages/WorldDashboard';
 import { WorldView } from './pages/WorldView';
+import { CommunityPostDetail } from './pages/CommunityPostDetail';
 import { Profile } from './pages/Profile';
 
 function App() {
@@ -38,6 +39,10 @@ function App() {
           <Route
             path="/world/:worldId"
             element={user ? <WorldView /> : <Navigate to="/login" />}
+          />
+          <Route
+            path="/world/:worldId/community/:postId"
+            element={user ? <CommunityPostDetail /> : <Navigate to="/login" />}
           />
           <Route
             path="/profile"

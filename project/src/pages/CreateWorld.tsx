@@ -242,7 +242,7 @@ export function CreateWorld() {
 
           <div className="space-y-4">
             {formData.roles.map((role, index) => (
-              <div key={index} className="bg-gray-700 rounded-md p-4">
+              <div key={index} className="bg-gray-700  rounded-md p-4">
                 <div className="flex justify-between items-start mb-3">
                   <span className="text-gray-400 text-sm">Role {index + 1}</span>
                   {formData.roles.length > 1 && (
@@ -260,7 +260,7 @@ export function CreateWorld() {
                     type="text"
                     value={role.name}
                     onChange={(e) => updateRole(index, 'name', e.target.value)}
-                    className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                    className="w-full px-3 py-2  bg-gray-600 border border-gray-500 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                     placeholder="Role name (e.g., Scholar, Guardian, Seeker)"
                   />
                   <textarea

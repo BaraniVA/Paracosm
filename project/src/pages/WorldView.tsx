@@ -43,14 +43,7 @@ interface CommunityPost {
   upvotes: number;
   created_at: string;
   author: { username: string };
-  comments: CommunityComment[];
-}
-
-interface CommunityComment {
-  id: string;
-  comment_text: string;
-  created_at: string;
-  author: { username: string };
+  comments_count: number;
 }
 
 export function WorldView() {
@@ -66,7 +59,6 @@ export function WorldView() {
   const [newQuestion, setNewQuestion] = useState('');
   const [newScroll, setNewScroll] = useState('');
   const [newPost, setNewPost] = useState({ title: '', content: '' });
-  const [newComments, setNewComments] = useState<{ [key: string]: string }>({});
   const [activeTab, setActiveTab] = useState('overview');
   const [loading, setLoading] = useState(true);
   const [showForkDialog, setShowForkDialog] = useState(false);
@@ -164,7 +156,7 @@ export function WorldView() {
       if (scrollsError) throw scrollsError;
       setScrolls(scrollsData || []);
 
-      // Fetch community posts with comments
+      // Fetch community posts with comment counts
       const { data: postsData, error: postsError } = await supabase
         .from('community_posts')
         .select(`
@@ -176,28 +168,23 @@ export function WorldView() {
 
       if (postsError) throw postsError;
 
-      // Fetch comments for each post
-      const postsWithComments = await Promise.all(
+      // Get comment counts for each post
+      const postsWithCommentCounts = await Promise.all(
         (postsData || []).map(async (post) => {
-          const { data: commentsData, error: commentsError } = await supabase
+          const { count: commentCount, error: countError } = await supabase
             .from('community_comments')
-            .select(`
-              *,
-              author:users!author_id(username)
-            `)
-            .eq('post_id', post.id)
-            .order('created_at', { ascending: true });
+            .select('*', { count: 'exact', head: true })
+            .eq('post_id', post.id);
 
-          if (commentsError) {
-            console.error('Error fetching comments:', commentsError);
-            return { ...post, comments: [] };
+          if (countError) {
+            console.error('Error counting comments:', countError);
           }
 
-          return { ...post, comments: commentsData || [] };
+          return { ...post, comments_count: commentCount || 0 };
         })
       );
 
-      setCommunityPosts(postsWithComments);
+      setCommunityPosts(postsWithCommentCounts);
     } catch (error) {
       console.error('Error fetching world data:', error);
     } finally {
@@ -290,28 +277,6 @@ export function WorldView() {
       fetchWorldData();
     } catch (error) {
       console.error('Error submitting community post:', error);
-    }
-  };
-
-  const submitComment = async (postId: string) => {
-    if (!user || !newComments[postId]?.trim()) return;
-
-    try {
-      const { error } = await supabase
-        .from('community_comments')
-        .insert([
-          {
-            post_id: postId,
-            author_id: user.id,
-            comment_text: newComments[postId].trim(),
-          },
-        ]);
-
-      if (error) throw error;
-      setNewComments(prev => ({ ...prev, [postId]: '' }));
-      fetchWorldData();
-    } catch (error) {
-      console.error('Error submitting comment:', error);
     }
   };
 
@@ -480,6 +445,11 @@ export function WorldView() {
     }
   };
 
+  const truncateText = (text: string, maxLength: number = 150) => {
+    if (text.length <= maxLength) return text;
+    return text.slice(0, maxLength).trim() + '...';
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -498,7 +468,7 @@ export function WorldView() {
   return (
     <div className="max-w-6xl mx-auto space-y-6">
       {/* World Header */}
-      <div className="bg-gray-800 rounded-lg p-6">
+      <div className=" rounded-lg p-6">
         <div className="flex justify-between items-start mb-6">
           <div className="flex-1">
             <h1 className="text-3xl font-bold text-white mb-3">{world.title}</h1>
@@ -532,7 +502,7 @@ export function WorldView() {
           <h3 className="text-lg font-semibold text-white mb-4">World Laws</h3>
           <div className="grid md:grid-cols-2 gap-3">
             {world.laws.map((law, index) => (
-              <div key={index} className="flex items-start space-x-3 p-4 bg-gray-700 rounded-lg">
+              <div key={index} className="flex items-start space-x-3 p-4 rounded-lg bg-gray-700">
                 <span className="text-indigo-400 font-mono text-sm font-bold mt-0.5">{index + 1}.</span>
                 <p className="text-gray-200 text-sm leading-relaxed">{law}</p>
               </div>
@@ -605,20 +575,24 @@ export function WorldView() {
               </h3>
               <div className="space-y-3">
                 {communityPosts.slice(0, 3).map((post) => (
-                  <div key={post.id} className="p-3">
+                  <Link
+                    key={post.id}
+                    to={`/world/${worldId}/community/${post.id}`}
+                    className="block p-3 hover:bg-gray-700 rounded-lg transition-colors"
+                  >
                     <h4 className="text-white font-medium text-sm mb-1">{post.title}</h4>
-                    <p className="text-gray-300 text-xs mb-2 line-clamp-2">{post.content}</p>
+                    <p className="text-gray-300 text-xs mb-2 line-clamp-2">{truncateText(post.content, 80)}</p>
                     <div className="flex justify-between items-center text-xs text-gray-400">
                       <span>{post.author.username}</span>
                       <div className="flex items-center space-x-2">
-                        <span>{post.comments.length} replies</span>
+                        <span>{post.comments_count} replies</span>
                         <div className="flex items-center space-x-1">
                           <ArrowUp className="h-3 w-3" />
                           <span>{post.upvotes}</span>
                         </div>
                       </div>
                     </div>
-                  </div>
+                  </Link>
                 ))}
                 {communityPosts.length === 0 && (
                   <p className="text-gray-400 text-center py-4">No community posts yet</p>
@@ -657,9 +631,9 @@ export function WorldView() {
               </h3>
               <div className="space-y-3">
                 {canonScrolls.slice(0, 3).map((scroll) => (
-                  <div key={scroll.id} className="p-3 bg-gray-700 rounded-lg">
+                  <div key={scroll.id} className="p-3 rounded-lg">
                     <p className="text-gray-200 text-sm leading-relaxed mb-2">
-                      {scroll.scroll_text.slice(0, 100)}...
+                      {truncateText(scroll.scroll_text, 100)}
                     </p>
                     <div className="flex justify-between items-center text-xs text-gray-400">
                       <span>{scroll.author.username}</span>
@@ -678,7 +652,7 @@ export function WorldView() {
         {activeTab === 'community' && (
           <div className="space-y-6">
             {user && (
-              <div className="bg-gray-800 rounded-lg p-6">
+              <div className="brounded-lg p-6">
                 <h3 className="text-lg font-semibold text-white mb-4">Create a Post</h3>
                 <div className="space-y-4">
                   <input
@@ -686,7 +660,7 @@ export function WorldView() {
                     value={newPost.title}
                     onChange={(e) => setNewPost(prev => ({ ...prev, title: e.target.value }))}
                     placeholder="Post title..."
-                    className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    className="w-full px-4 py-3 bg-gray-700  border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                   />
                   <textarea
                     value={newPost.content}
@@ -711,7 +685,7 @@ export function WorldView() {
 
             <div className="space-y-4">
               {communityPosts.map((post) => (
-                <div key={post.id} className="bg-gray-800 rounded-lg p-6">
+                <div key={post.id} className=" bg-gray-800 rounded-lg p-6 border border-gray-700 hover:border-gray-600 transition-colors">
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex items-center space-x-3">
                       <div className="w-10 h-10 bg-indigo-600 rounded-full flex items-center justify-center">
@@ -736,55 +710,28 @@ export function WorldView() {
                     </button>
                   </div>
                   
-                  <h3 className="text-xl font-semibold text-white mb-3">{post.title}</h3>
-                  <p className="text-gray-200 leading-relaxed mb-4">{post.content}</p>
+                  <Link to={`/world/${worldId}/community/${post.id}`} className="block">
+                    <h3 className="text-xl font-semibold text-white mb-3 hover:text-indigo-400 transition-colors">
+                      {post.title}
+                    </h3>
+                    <p className="text-gray-200 leading-relaxed mb-4">
+                      {truncateText(post.content, 200)}
+                    </p>
+                  </Link>
 
-                  {/* Comments */}
-                  <div className="border-t border-gray-700 pt-4">
-                    <div className="space-y-3 mb-4">
-                      {post.comments.map((comment) => (
-                        <div key={comment.id} className="flex space-x-3 p-3 bg-gray-700 rounded-lg">
-                          <div className="w-8 h-8 bg-gray-600 rounded-full flex items-center justify-center flex-shrink-0">
-                            <span className="text-white text-sm">
-                              {comment.author.username[0].toUpperCase()}
-                            </span>
-                          </div>
-                          <div className="flex-1">
-                            <div className="flex items-center space-x-2 mb-1">
-                              <span className="text-white font-medium text-sm">{comment.author.username}</span>
-                              <span className="text-gray-400 text-xs">
-                                {new Date(comment.created_at).toLocaleDateString()}
-                              </span>
-                            </div>
-                            <p className="text-gray-200 text-sm">{comment.comment_text}</p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-
-                    {user && (
-                      <div className="flex space-x-3">
-                        <input
-                          type="text"
-                          value={newComments[post.id] || ''}
-                          onChange={(e) => setNewComments(prev => ({ ...prev, [post.id]: e.target.value }))}
-                          placeholder="Add a comment..."
-                          className="flex-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                          onKeyPress={(e) => {
-                            if (e.key === 'Enter' && newComments[post.id]?.trim()) {
-                              submitComment(post.id);
-                            }
-                          }}
-                        />
-                        <button
-                          onClick={() => submitComment(post.id)}
-                          disabled={!newComments[post.id]?.trim()}
-                          className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
-                        >
-                          Reply
-                        </button>
-                      </div>
-                    )}
+                  <div className="flex items-center justify-between pt-4 border-t border-gray-700">
+                    <Link
+                      to={`/world/${worldId}/community/${post.id}`}
+                      className="flex items-center space-x-2 text-gray-400 hover:text-indigo-400 transition-colors"
+                    >
+                      <MessageCircle className="h-4 w-4" />
+                      <span className="text-sm">
+                        {post.comments_count} {post.comments_count === 1 ? 'comment' : 'comments'}
+                      </span>
+                    </Link>
+                    <span className="text-gray-400 text-sm">
+                      {new Date(post.created_at).toLocaleDateString()}
+                    </span>
                   </div>
                 </div>
               ))}
@@ -804,7 +751,7 @@ export function WorldView() {
         {activeTab === 'questions' && (
           <div className="space-y-6">
             {user && userRole && (
-              <div className="bg-gray-800 rounded-lg p-6">
+              <div className=" rounded-lg p-6">
                 <h3 className="text-lg font-semibold text-white mb-4">Ask a Question</h3>
                 <div className="flex space-x-3">
                   <input
@@ -878,7 +825,7 @@ export function WorldView() {
         {activeTab === 'lore' && (
           <div className="space-y-6">
             {user && userRole && (
-              <div className="bg-gray-800 rounded-lg p-6">
+              <div className=" rounded-lg p-6">
                 <h3 className="text-lg font-semibold text-white mb-4">Submit a Scroll</h3>
                 <div className="space-y-3">
                   <textarea

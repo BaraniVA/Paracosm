@@ -232,6 +232,7 @@ export type Database = {
           post_id: string;
           author_id: string;
           comment_text: string;
+          parent_comment_id: string | null;
           created_at: string;
         };
         Insert: {
@@ -239,6 +240,7 @@ export type Database = {
           post_id: string;
           author_id: string;
           comment_text: string;
+          parent_comment_id?: string | null;
           created_at?: string;
         };
         Update: {
@@ -246,6 +248,7 @@ export type Database = {
           post_id?: string;
           author_id?: string;
           comment_text?: string;
+          parent_comment_id?: string | null;
           created_at?: string;
         };
       };

@@ -230,7 +230,7 @@ export function Profile() {
               <Link
                 key={world.id}
                 to={`/world/${world.id}`}
-                className="block p-3 bg-gray-700 rounded-md hover:bg-gray-600 transition-colors"
+                className="block p-3 rounded-md hover:bg-gray-600 transition-colors"
               >
                 <h3 className="font-medium text-white">{world.title}</h3>
                 <p className="text-gray-300 text-sm line-clamp-2">{world.description}</p>
@@ -268,7 +268,7 @@ export function Profile() {
               <Link
                 key={index}
                 to={`/world/${inhabitant.world.id}`}
-                className="block p-3 bg-gray-700 rounded-md hover:bg-gray-600 transition-colors"
+                className="block p-3 rounded-md hover:bg-gray-600 transition-colors"
               >
                 <div className="flex justify-between items-start">
                   <div>
@@ -299,7 +299,7 @@ export function Profile() {
           </h2>
           <div className="space-y-3">
             {userScrolls.map((scroll) => (
-              <div key={scroll.id} className="p-3 bg-gray-700 rounded-md">
+              <div key={scroll.id} className="p-3 rounded-md">
                 <div className="flex justify-between items-start mb-2">
                   <span className="text-indigo-400 text-sm">{scroll.world.title}</span>
                   {scroll.is_canon && (
@@ -330,7 +330,7 @@ export function Profile() {
           </h2>
           <div className="space-y-3">
             {userQuestions.map((question) => (
-              <div key={question.id} className="p-3 bg-gray-700 rounded-md">
+              <div key={question.id} className="p-3 rounded-md">
                 <div className="flex justify-between items-start mb-2">
                   <span className="text-indigo-400 text-sm">{question.world.title}</span>
                   <div className="flex items-center space-x-2 text-xs text-gray-400">
@@ -342,7 +342,7 @@ export function Profile() {
                 </div>
                 <p className="text-gray-200 text-sm">{question.question_text}</p>
                 {question.answer && (
-                  <div className="mt-2 p-2 bg-gray-600 rounded text-sm text-gray-300">
+                  <div className="mt-2 p-2 rounded text-sm text-gray-300">
                     {question.answer}
                   </div>
                 )}

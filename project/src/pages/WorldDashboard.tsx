@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
-import { Users, MessageSquare, Scroll, GitBranch, Settings, Check, X, Trash2, ArrowUp } from 'lucide-react';
+import { Users, MessageSquare, Scroll, GitBranch, Settings, Check, X, Trash2, ArrowUp, Edit, Save, Plus } from 'lucide-react';
 
 interface World {
   id: string;
@@ -10,6 +10,15 @@ interface World {
   description: string;
   laws: string[];
   creator_id: string;
+}
+
+interface Role {
+  id: string;
+  world_id: string;
+  name: string;
+  description: string;
+  created_by: string;
+  is_system_role: boolean;
 }
 
 interface Question {
@@ -42,12 +51,21 @@ export function WorldDashboard() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('pending');
   const [world, setWorld] = useState<World | null>(null);
+  const [roles, setRoles] = useState<Role[]>([]);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [allScrolls, setAllScrolls] = useState<ScrollItem[]>([]);
   const [inhabitants, setInhabitants] = useState<Inhabitant[]>([]);
   const [loading, setLoading] = useState(true);
   const [answerInputs, setAnswerInputs] = useState<{ [key: string]: string }>({});
   const [error, setError] = useState<string>('');
+  const [editingLaws, setEditingLaws] = useState(false);
+  const [editedLaws, setEditedLaws] = useState<string[]>([]);
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [editedTitle, setEditedTitle] = useState('');
+  const [editingDescription, setEditingDescription] = useState(false);
+  const [editedDescription, setEditedDescription] = useState('');
+  const [editingRoles, setEditingRoles] = useState(false);
+  const [editedRoles, setEditedRoles] = useState<{ id?: string; name: string; description: string; isNew?: boolean }[]>([]);
 
   useEffect(() => {
     if (!worldId || !user) return;
@@ -89,6 +107,24 @@ export function WorldDashboard() {
       }
 
       setWorld(worldData);
+      setEditedLaws([...worldData.laws]);
+      setEditedTitle(worldData.title);
+      setEditedDescription(worldData.description);
+
+      // Fetch roles
+      const { data: rolesData, error: rolesError } = await supabase
+        .from('roles')
+        .select('*')
+        .eq('world_id', worldId)
+        .order('created_by', { ascending: true });
+
+      if (rolesError) throw rolesError;
+      setRoles(rolesData || []);
+      setEditedRoles((rolesData || []).map(role => ({
+        id: role.id,
+        name: role.name,
+        description: role.description
+      })));
 
       // Fetch questions
       const { data: questionsData, error: questionsError } = await supabase
@@ -137,6 +173,197 @@ export function WorldDashboard() {
     }
   };
 
+  const updateWorldTitle = async () => {
+    if (!user || !world || !editedTitle.trim() || user.id !== world.creator_id) return;
+
+    try {
+      const { error } = await supabase
+        .from('worlds')
+        .update({ title: editedTitle.trim() })
+        .eq('id', worldId);
+
+      if (error) throw error;
+      setEditingTitle(false);
+      fetchWorldData();
+    } catch (error) {
+      console.error('Error updating world title:', error);
+    }
+  };
+
+  const updateWorldDescription = async () => {
+    if (!user || !world || !editedDescription.trim() || user.id !== world.creator_id) return;
+
+    try {
+      const { error } = await supabase
+        .from('worlds')
+        .update({ description: editedDescription.trim() })
+        .eq('id', worldId);
+
+      if (error) throw error;
+      setEditingDescription(false);
+      fetchWorldData();
+    } catch (error) {
+      console.error('Error updating world description:', error);
+    }
+  };
+
+  const updateWorldLaws = async () => {
+    if (!user || !world || user.id !== world.creator_id) return;
+
+    const validLaws = editedLaws.filter(law => law.trim() !== '');
+    if (validLaws.length < 1) {
+      alert('Please provide at least one law for your world');
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('worlds')
+        .update({ laws: validLaws })
+        .eq('id', worldId);
+
+      if (error) throw error;
+      setEditingLaws(false);
+      fetchWorldData();
+    } catch (error) {
+      console.error('Error updating world laws:', error);
+    }
+  };
+
+  const addLaw = () => {
+    setEditedLaws([...editedLaws, '']);
+  };
+
+  const removeLaw = (index: number) => {
+    if (editedLaws.length > 1) {
+      setEditedLaws(editedLaws.filter((_, i) => i !== index));
+    }
+  };
+
+  const updateLaw = (index: number, value: string) => {
+    const newLaws = [...editedLaws];
+    newLaws[index] = value;
+    setEditedLaws(newLaws);
+  };
+
+  const cancelEditLaws = () => {
+    setEditedLaws([...world!.laws]);
+    setEditingLaws(false);
+  };
+
+  const cancelEditTitle = () => {
+    setEditedTitle(world!.title);
+    setEditingTitle(false);
+  };
+
+  const cancelEditDescription = () => {
+    setEditedDescription(world!.description);
+    setEditingDescription(false);
+  };
+
+  // Role management functions
+  const addRole = () => {
+    setEditedRoles([...editedRoles, { name: '', description: '', isNew: true }]);
+  };
+
+  const removeRole = (index: number) => {
+    setEditedRoles(editedRoles.filter((_, i) => i !== index));
+  };
+
+  const updateRole = (index: number, field: 'name' | 'description', value: string) => {
+    const newRoles = [...editedRoles];
+    newRoles[index][field] = value;
+    setEditedRoles(newRoles);
+  };
+
+  const saveRoles = async () => {
+    if (!user || !world || user.id !== world.creator_id) return;
+
+    try {
+      // Get current roles from database
+      const currentRoles = roles;
+      const currentRoleIds = currentRoles.map(r => r.id);
+      const editedRoleIds = editedRoles.filter(r => r.id).map(r => r.id);
+
+      // Find roles to delete (exist in current but not in edited)
+      const rolesToDelete = currentRoles.filter(role => 
+        !editedRoles.some(editedRole => editedRole.id === role.id)
+      );
+
+      // Find roles to insert (new roles without id)
+      const rolesToInsert = editedRoles.filter(role => 
+        role.isNew && role.name.trim() !== ''
+      );
+
+      // Find roles to update (existing roles with changes)
+      const rolesToUpdate = editedRoles.filter(role => {
+        if (!role.id || role.isNew) return false;
+        const originalRole = currentRoles.find(r => r.id === role.id);
+        return originalRole && (
+          originalRole.name !== role.name || 
+          originalRole.description !== role.description
+        );
+      });
+
+      // Delete roles
+      if (rolesToDelete.length > 0) {
+        const { error: deleteError } = await supabase
+          .from('roles')
+          .delete()
+          .in('id', rolesToDelete.map(r => r.id));
+
+        if (deleteError) throw deleteError;
+      }
+
+      // Insert new roles
+      if (rolesToInsert.length > 0) {
+        const { error: insertError } = await supabase
+          .from('roles')
+          .insert(
+            rolesToInsert.map(role => ({
+              world_id: worldId,
+              name: role.name.trim(),
+              description: role.description.trim(),
+              created_by: user.id,
+              is_system_role: false,
+            }))
+          );
+
+        if (insertError) throw insertError;
+      }
+
+      // Update existing roles
+      if (rolesToUpdate.length > 0) {
+        for (const role of rolesToUpdate) {
+          const { error: updateError } = await supabase
+            .from('roles')
+            .update({
+              name: role.name.trim(),
+              description: role.description.trim(),
+            })
+            .eq('id', role.id);
+
+          if (updateError) throw updateError;
+        }
+      }
+
+      setEditingRoles(false);
+      fetchWorldData();
+    } catch (error) {
+      console.error('Error saving roles:', error);
+      alert('Error saving roles. Please try again.');
+    }
+  };
+
+  const cancelEditRoles = () => {
+    setEditedRoles(roles.map(role => ({
+      id: role.id,
+      name: role.name,
+      description: role.description
+    })));
+    setEditingRoles(false);
+  };
+
   const answerQuestion = async (questionId: string, answer: string) => {
     try {
       const { error } = await supabase
@@ -177,6 +404,10 @@ export function WorldDashboard() {
   };
 
   const rejectScroll = async (scrollId: string) => {
+    if (!confirm('Are you sure you want to reject this scroll? This action cannot be undone.')) {
+      return;
+    }
+
     try {
       const { error } = await supabase
         .from('scrolls')
@@ -274,7 +505,87 @@ export function WorldDashboard() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">{world.title}</h1>
+          {/* Editable Title */}
+          {editingTitle ? (
+            <div className="flex items-center space-x-3 mb-2">
+              <input
+                type="text"
+                value={editedTitle}
+                onChange={(e) => setEditedTitle(e.target.value)}
+                className="text-2xl font-bold bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter') updateWorldTitle();
+                  if (e.key === 'Escape') cancelEditTitle();
+                }}
+                autoFocus
+              />
+              <button
+                onClick={updateWorldTitle}
+                className="p-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+              >
+                <Save className="h-4 w-4" />
+              </button>
+              <button
+                onClick={cancelEditTitle}
+                className="p-2 bg-gray-600 text-white rounded-lg hover:bg-gray-500 transition-colors"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center space-x-3 mb-2">
+              <h1 className="text-2xl font-bold text-white">{world.title}</h1>
+              <button
+                onClick={() => setEditingTitle(true)}
+                className="p-1 text-gray-400 hover:text-white transition-colors"
+              >
+                <Edit className="h-4 w-4" />
+              </button>
+            </div>
+          )}
+
+          {/* Editable Description */}
+          {editingDescription ? (
+            <div className="space-y-2 mb-2">
+              <textarea
+                value={editedDescription}
+                onChange={(e) => setEditedDescription(e.target.value)}
+                rows={3}
+                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none"
+                onKeyPress={(e) => {
+                  if (e.key === 'Escape') cancelEditDescription();
+                }}
+                autoFocus
+              />
+              <div className="flex space-x-2">
+                <button
+                  onClick={updateWorldDescription}
+                  className="flex items-center px-3 py-1 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm"
+                >
+                  <Save className="h-4 w-4 mr-1" />
+                  Save
+                </button>
+                <button
+                  onClick={cancelEditDescription}
+                  className="flex items-center px-3 py-1 bg-gray-600 text-white rounded-lg hover:bg-gray-500 transition-colors text-sm"
+                >
+                  <X className="h-4 w-4 mr-1" />
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-start space-x-3 mb-2">
+              <p className="text-gray-400 text-sm flex-1">{world.description}</p>
+              <button
+                onClick={() => setEditingDescription(true)}
+                className="p-1 text-gray-400 hover:text-white transition-colors"
+              >
+                <Edit className="h-4 w-4" />
+              </button>
+            </div>
+          )}
+
           <p className="text-gray-400 text-sm">Creator Dashboard</p>
         </div>
         <button
@@ -283,6 +594,210 @@ export function WorldDashboard() {
         >
           View Public World
         </button>
+      </div>
+
+      {/* World Laws Management */}
+      <div className=" rounded-lg p-6">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-semibold text-white">World Laws</h3>
+          <div className="flex space-x-2">
+            {editingLaws ? (
+              <>
+                <button
+                  onClick={addLaw}
+                  className="flex items-center px-3 py-1 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm"
+                >
+                  <Plus className="h-4 w-4 mr-1" />
+                  Add Law
+                </button>
+                <button
+                  onClick={updateWorldLaws}
+                  className="flex items-center px-3 py-1 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm"
+                >
+                  <Save className="h-4 w-4 mr-1" />
+                  Save
+                </button>
+                <button
+                  onClick={cancelEditLaws}
+                  className="flex items-center px-3 py-1 bg-gray-600 text-white rounded-lg hover:bg-gray-500 transition-colors text-sm"
+                >
+                  <X className="h-4 w-4 mr-1" />
+                  Cancel
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={() => setEditingLaws(true)}
+                className="flex items-center px-3 py-1 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-colors text-sm"
+              >
+                <Edit className="h-4 w-4 mr-1" />
+                Edit Laws
+              </button>
+            )}
+          </div>
+        </div>
+
+        {editingLaws ? (
+          <div className="space-y-3">
+            {editedLaws.map((law, index) => (
+              <div key={index} className="flex items-center space-x-3">
+                <span className="text-indigo-400 font-mono text-sm font-bold w-8">{index + 1}.</span>
+                <input
+                  type="text"
+                  value={law}
+                  onChange={(e) => updateLaw(index, e.target.value)}
+                  className="flex-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  placeholder="Enter world law..."
+                />
+                {editedLaws.length > 1 && (
+                  <button
+                    onClick={() => removeLaw(index)}
+                    className="p-2 text-red-400 hover:text-red-300 transition-colors"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="grid md:grid-cols-2 gap-3">
+            {world.laws.map((law, index) => (
+              <div key={index} className="flex items-start space-x-3 p-4 bg-gray-700 rounded-lg">
+                <span className="text-indigo-400 font-mono text-sm font-bold mt-0.5">{index + 1}.</span>
+                <p className="text-gray-200 text-sm leading-relaxed">{law}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* World Roles Management */}
+      <div className="rounded-lg p-6">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-semibold text-white">World Roles</h3>
+          <div className="flex space-x-2">
+            {editingRoles ? (
+              <>
+                <button
+                  onClick={addRole}
+                  className="flex items-center px-3 py-1 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm"
+                >
+                  <Plus className="h-4 w-4 mr-1" />
+                  Add Role
+                </button>
+                <button
+                  onClick={saveRoles}
+                  className="flex items-center px-3 py-1 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm"
+                >
+                  <Save className="h-4 w-4 mr-1" />
+                  Save
+                </button>
+                <button
+                  onClick={cancelEditRoles}
+                  className="flex items-center px-3 py-1 bg-gray-600 text-white rounded-lg hover:bg-gray-500 transition-colors text-sm"
+                >
+                  <X className="h-4 w-4 mr-1" />
+                  Cancel
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={() => setEditingRoles(true)}
+                className="flex items-center px-3 py-1 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-colors text-sm"
+              >
+                <Edit className="h-4 w-4 mr-1" />
+                Edit Roles
+              </button>
+            )}
+          </div>
+        </div>
+
+        {editingRoles ? (
+          <div className="space-y-4">
+            {editedRoles.map((role, index) => (
+              <div key={index} className="bg-gray-700 rounded-lg p-4">
+                <div className="flex justify-between items-start mb-3">
+                  <span className="text-gray-400 text-sm">
+                    {role.isNew ? 'New Role' : `Role ${index + 1}`}
+                  </span>
+                  <button
+                    onClick={() => removeRole(index)}
+                    className="p-1 text-red-400 hover:text-red-300 transition-colors"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-1">
+                      Role Name
+                    </label>
+                    <input
+                      type="text"
+                      value={role.name}
+                      onChange={(e) => updateRole(index, 'name', e.target.value)}
+                      className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                      placeholder="Role name (e.g., Scholar, Guardian, Seeker)"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-1">
+                      Role Description
+                    </label>
+                    <textarea
+                      value={role.description}
+                      onChange={(e) => updateRole(index, 'description', e.target.value)}
+                      rows={2}
+                      className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none"
+                      placeholder="Role description and responsibilities..."
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
+            {editedRoles.length === 0 && (
+              <div className="text-center py-8">
+                <Users className="h-12 w-12 text-gray-600 mx-auto mb-4" />
+                <p className="text-gray-400 mb-4">No roles defined yet</p>
+                <button
+                  onClick={addRole}
+                  className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors mx-auto"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add First Role
+                </button>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div>
+            {roles.length > 0 ? (
+              <div className="grid md:grid-cols-2 gap-4">
+                {roles.map((role) => (
+                  <div key={role.id} className="p-4 bg-gray-700 rounded-lg">
+                    <h4 className="font-medium text-white mb-2">{role.name}</h4>
+                    <p className="text-gray-300 text-sm leading-relaxed">
+                      {role.description || 'No description provided'}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <Users className="h-12 w-12 text-gray-600 mx-auto mb-4" />
+                <p className="text-gray-400 mb-4">No roles defined yet</p>
+                <button
+                  onClick={() => setEditingRoles(true)}
+                  className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors mx-auto"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add First Role
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Stats Bar */}

@@ -195,6 +195,18 @@ CREATE POLICY "World creators can approve scrolls"
     )
   );
 
+CREATE POLICY "World creators can delete their scrolls"
+  ON scrolls
+  FOR DELETE
+  TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM worlds 
+      WHERE worlds.id = scrolls.world_id 
+      AND worlds.creator_id = auth.uid()
+    )
+  );
+
 -- Forks table policies
 CREATE POLICY "Anyone can read forks"
   ON forks
