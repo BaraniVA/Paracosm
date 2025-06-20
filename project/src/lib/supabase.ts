@@ -252,6 +252,70 @@ export type Database = {
           created_at?: string;
         };
       };
+      world_records: {
+        Row: {
+          id: string;
+          world_id: string;
+          author_id: string;
+          title: string;
+          description: string;
+          category: string;
+          linked_to_type: string | null;
+          linked_to_id: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          world_id: string;
+          author_id: string;
+          title: string;
+          description: string;
+          category: string;
+          linked_to_type?: string | null;
+          linked_to_id?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          world_id?: string;
+          author_id?: string;
+          title?: string;
+          description?: string;
+          category?: string;
+          linked_to_type?: string | null;
+          linked_to_id?: string | null;
+          created_at?: string;
+        };
+      };
+      timeline_entries: {
+        Row: {
+          id: string;
+          world_id: string;
+          author_id: string;
+          era_title: string;
+          year: string;
+          description: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          world_id: string;
+          author_id: string;
+          era_title: string;
+          year: string;
+          description: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          world_id?: string;
+          author_id?: string;
+          era_title?: string;
+          year?: string;
+          description?: string;
+          created_at?: string;
+        };
+      };
     };
   };
 };

@@ -2,7 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
-import { Users, MessageSquare, Scroll, GitBranch, Settings, Check, X, Trash2, ArrowUp, Edit, Save, Plus } from 'lucide-react';
+import { Users, MessageSquare, Scroll, GitBranch, Settings, Check, X, Trash2, ArrowUp, Edit, Save, Plus, BookOpen, Clock } from 'lucide-react';
+import { CreateEditWorldRecordForm } from '../components/CreateEditWorldRecordForm';
+import { CreateEditTimelineEntryForm } from '../components/CreateEditTimelineEntryForm';
 
 interface World {
   id: string;
@@ -45,6 +47,24 @@ interface Inhabitant {
   role: { name: string };
 }
 
+interface WorldRecord {
+  id: string;
+  title: string;
+  description: string;
+  category: string;
+  linked_to_type: string | null;
+  linked_to_id: string | null;
+  created_at: string;
+}
+
+interface TimelineEntry {
+  id: string;
+  era_title: string;
+  year: string;
+  description: string;
+  created_at: string;
+}
+
 export function WorldDashboard() {
   const { worldId } = useParams<{ worldId: string }>();
   const { user } = useAuth();
@@ -55,6 +75,8 @@ export function WorldDashboard() {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [allScrolls, setAllScrolls] = useState<ScrollItem[]>([]);
   const [inhabitants, setInhabitants] = useState<Inhabitant[]>([]);
+  const [worldRecords, setWorldRecords] = useState<WorldRecord[]>([]);
+  const [timelineEntries, setTimelineEntries] = useState<TimelineEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [answerInputs, setAnswerInputs] = useState<{ [key: string]: string }>({});
   const [error, setError] = useState<string>('');
@@ -66,6 +88,10 @@ export function WorldDashboard() {
   const [editedDescription, setEditedDescription] = useState('');
   const [editingRoles, setEditingRoles] = useState(false);
   const [editedRoles, setEditedRoles] = useState<{ id?: string; name: string; description: string; isNew?: boolean }[]>([]);
+  const [showRecordForm, setShowRecordForm] = useState(false);
+  const [editingRecord, setEditingRecord] = useState<WorldRecord | null>(null);
+  const [showTimelineForm, setShowTimelineForm] = useState(false);
+  const [editingTimelineEntry, setEditingTimelineEntry] = useState<TimelineEntry | null>(null);
 
   useEffect(() => {
     if (!worldId || !user) return;
@@ -165,12 +191,116 @@ export function WorldDashboard() {
 
       if (inhabitantsError) throw inhabitantsError;
       setInhabitants(inhabitantsData || []);
+
+      // Fetch world records
+      const { data: recordsData, error: recordsError } = await supabase
+        .from('world_records')
+        .select('*')
+        .eq('world_id', worldId)
+        .order('created_at', { ascending: false });
+
+      if (recordsError) throw recordsError;
+      setWorldRecords(recordsData || []);
+
+      // Fetch timeline entries
+      const { data: timelineData, error: timelineError } = await supabase
+        .from('timeline_entries')
+        .select('*')
+        .eq('world_id', worldId)
+        .order('year', { ascending: true });
+
+      if (timelineError) throw timelineError;
+      setTimelineEntries(timelineData || []);
     } catch (error: any) {
       console.error('Error fetching world data:', error);
       setError(error.message || 'Failed to load world data');
     } finally {
       setLoading(false);
     }
+  };
+
+  // World Records functions
+  const createWorldRecord = async (data: any) => {
+    if (!user) return;
+
+    const { error } = await supabase
+      .from('world_records')
+      .insert([{ ...data, author_id: user.id }]);
+
+    if (error) throw error;
+    setShowRecordForm(false);
+    setEditingRecord(null);
+    fetchWorldData();
+  };
+
+  const updateWorldRecord = async (data: any) => {
+    if (!editingRecord) return;
+
+    const { error } = await supabase
+      .from('world_records')
+      .update(data)
+      .eq('id', editingRecord.id);
+
+    if (error) throw error;
+    setShowRecordForm(false);
+    setEditingRecord(null);
+    fetchWorldData();
+  };
+
+  const deleteWorldRecord = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this record? This action cannot be undone.')) {
+      return;
+    }
+
+    const { error } = await supabase
+      .from('world_records')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+    fetchWorldData();
+  };
+
+  // Timeline functions
+  const createTimelineEntry = async (data: any) => {
+    if (!user) return;
+
+    const { error } = await supabase
+      .from('timeline_entries')
+      .insert([{ ...data, author_id: user.id }]);
+
+    if (error) throw error;
+    setShowTimelineForm(false);
+    setEditingTimelineEntry(null);
+    fetchWorldData();
+  };
+
+  const updateTimelineEntry = async (data: any) => {
+    if (!editingTimelineEntry) return;
+
+    const { error } = await supabase
+      .from('timeline_entries')
+      .update(data)
+      .eq('id', editingTimelineEntry.id);
+
+    if (error) throw error;
+    setShowTimelineForm(false);
+    setEditingTimelineEntry(null);
+    fetchWorldData();
+  };
+
+  const deleteTimelineEntry = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this timeline entry? This action cannot be undone.')) {
+      return;
+    }
+
+    const { error } = await supabase
+      .from('timeline_entries')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+    fetchWorldData();
   };
 
   const updateWorldTitle = async () => {
@@ -800,8 +930,138 @@ export function WorldDashboard() {
         )}
       </div>
 
+      {/* World Records Management */}
+      <div className="bg-gray-800 rounded-lg p-6">
+        <div className="flex justify-between items-center mb-6">
+          <h3 className="text-lg font-semibold text-white flex items-center">
+            <BookOpen className="h-5 w-5 mr-2" />
+            Manage World Records
+          </h3>
+          <button
+            onClick={() => setShowRecordForm(true)}
+            className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Create Record
+          </button>
+        </div>
+
+        {worldRecords.length > 0 ? (
+          <div className="space-y-3">
+            {worldRecords.map((record) => (
+              <div key={record.id} className="bg-gray-700 rounded-lg p-4">
+                <div className="flex justify-between items-start mb-3">
+                  <div className="flex-1">
+                    <div className="flex items-center space-x-3 mb-2">
+                      <h4 className="font-medium text-white">{record.title}</h4>
+                      <span className="bg-gray-600 px-2 py-1 rounded text-xs text-gray-300">
+                        {record.category}
+                      </span>
+                    </div>
+                    <p className="text-gray-300 text-sm leading-relaxed line-clamp-2">
+                      {record.description.length > 150 
+                        ? record.description.slice(0, 150) + '...' 
+                        : record.description}
+                    </p>
+                  </div>
+                  <div className="flex space-x-2 ml-4">
+                    <button
+                      onClick={() => {
+                        setEditingRecord(record);
+                        setShowRecordForm(true);
+                      }}
+                      className="p-2 text-gray-400 hover:text-indigo-400 transition-colors"
+                    >
+                      <Edit className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={() => deleteWorldRecord(record.id)}
+                      className="p-2 text-gray-400 hover:text-red-400 transition-colors"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+                <div className="text-xs text-gray-400">
+                  Created {new Date(record.created_at).toLocaleDateString()}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-8">
+            <BookOpen className="h-12 w-12 text-gray-600 mx-auto mb-4" />
+            <p className="text-gray-400 mb-4">No world records yet</p>
+            <p className="text-gray-500 text-sm">Create detailed records to document your world's lore</p>
+          </div>
+        )}
+      </div>
+
+      {/* Timeline Management */}
+      <div className="bg-gray-800 rounded-lg p-6">
+        <div className="flex justify-between items-center mb-6">
+          <h3 className="text-lg font-semibold text-white flex items-center">
+            <Clock className="h-5 w-5 mr-2" />
+            Manage Timeline
+          </h3>
+          <button
+            onClick={() => setShowTimelineForm(true)}
+            className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Add Era
+          </button>
+        </div>
+
+        {timelineEntries.length > 0 ? (
+          <div className="space-y-3">
+            {timelineEntries.map((entry) => (
+              <div key={entry.id} className="bg-gray-700 rounded-lg p-4">
+                <div className="flex justify-between items-start mb-3">
+                  <div className="flex-1">
+                    <div className="flex items-center space-x-3 mb-2">
+                      <span className="text-indigo-400 font-mono text-sm font-bold">{entry.year}</span>
+                      <h4 className="font-medium text-white">{entry.era_title}</h4>
+                    </div>
+                    <p className="text-gray-300 text-sm leading-relaxed">
+                      {entry.description}
+                    </p>
+                  </div>
+                  <div className="flex space-x-2 ml-4">
+                    <button
+                      onClick={() => {
+                        setEditingTimelineEntry(entry);
+                        setShowTimelineForm(true);
+                      }}
+                      className="p-2 text-gray-400 hover:text-indigo-400 transition-colors"
+                    >
+                      <Edit className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={() => deleteTimelineEntry(entry.id)}
+                      className="p-2 text-gray-400 hover:text-red-400 transition-colors"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+                <div className="text-xs text-gray-400">
+                  Added {new Date(entry.created_at).toLocaleDateString()}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-8">
+            <Clock className="h-12 w-12 text-gray-600 mx-auto mb-4" />
+            <p className="text-gray-400 mb-4">No timeline entries yet</p>
+            <p className="text-gray-500 text-sm">Add eras to show the history of your world</p>
+          </div>
+        )}
+      </div>
+
       {/* Stats Bar */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-6 gap-4">
         <div className="bg-gray-800 rounded-lg p-4 text-center">
           <div className="text-2xl font-bold text-white">{inhabitants.length}</div>
           <div className="text-gray-400 text-sm">Inhabitants</div>
@@ -817,6 +1077,14 @@ export function WorldDashboard() {
         <div className="bg-gray-800 rounded-lg p-4 text-center">
           <div className="text-2xl font-bold text-blue-400">{unansweredQuestions.length}</div>
           <div className="text-gray-400 text-sm">Unanswered</div>
+        </div>
+        <div className="bg-gray-800 rounded-lg p-4 text-center">
+          <div className="text-2xl font-bold text-purple-400">{worldRecords.length}</div>
+          <div className="text-gray-400 text-sm">Records</div>
+        </div>
+        <div className="bg-gray-800 rounded-lg p-4 text-center">
+          <div className="text-2xl font-bold text-indigo-400">{timelineEntries.length}</div>
+          <div className="text-gray-400 text-sm">Timeline</div>
         </div>
       </div>
 
@@ -1059,6 +1327,31 @@ export function WorldDashboard() {
           </div>
         )}
       </div>
+
+      {/* Forms */}
+      {showRecordForm && (
+        <CreateEditWorldRecordForm
+          worldId={worldId!}
+          initialData={editingRecord || undefined}
+          onSubmit={editingRecord ? updateWorldRecord : createWorldRecord}
+          onCancel={() => {
+            setShowRecordForm(false);
+            setEditingRecord(null);
+          }}
+        />
+      )}
+
+      {showTimelineForm && (
+        <CreateEditTimelineEntryForm
+          worldId={worldId!}
+          initialData={editingTimelineEntry || undefined}
+          onSubmit={editingTimelineEntry ? updateTimelineEntry : createTimelineEntry}
+          onCancel={() => {
+            setShowTimelineForm(false);
+            setEditingTimelineEntry(null);
+          }}
+        />
+      )}
     </div>
   );
 }

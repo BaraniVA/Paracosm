@@ -2,7 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
-import { ArrowUp, MessageSquare, Scroll, GitBranch, Settings, Users, Send, Plus, X, MessageCircle } from 'lucide-react';
+import { ArrowUp, MessageSquare, Scroll, GitBranch, Settings, Users, Send, Plus, X, MessageCircle, BookOpen, Clock, ChevronDown, ChevronRight } from 'lucide-react';
+import { WorldRecordCard } from '../components/WorldRecordCard';
+import { WorldRecordModal } from '../components/WorldRecordModal';
+import { CreateEditWorldRecordForm } from '../components/CreateEditWorldRecordForm';
+import { TimelineEntryCard } from '../components/TimelineEntryCard';
+import { CreateEditTimelineEntryForm } from '../components/CreateEditTimelineEntryForm';
 
 interface World {
   id: string;
@@ -46,6 +51,24 @@ interface CommunityPost {
   comments_count: number;
 }
 
+interface WorldRecord {
+  id: string;
+  title: string;
+  description: string;
+  category: string;
+  linked_to_type: string | null;
+  linked_to_id: string | null;
+  created_at: string;
+}
+
+interface TimelineEntry {
+  id: string;
+  era_title: string;
+  year: string;
+  description: string;
+  created_at: string;
+}
+
 export function WorldView() {
   const { worldId } = useParams<{ worldId: string }>();
   const { user } = useAuth();
@@ -55,6 +78,8 @@ export function WorldView() {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [scrolls, setScrolls] = useState<ScrollItem[]>([]);
   const [communityPosts, setCommunityPosts] = useState<CommunityPost[]>([]);
+  const [worldRecords, setWorldRecords] = useState<WorldRecord[]>([]);
+  const [timelineEntries, setTimelineEntries] = useState<TimelineEntry[]>([]);
   const [userRole, setUserRole] = useState<string | null>(null);
   const [newQuestion, setNewQuestion] = useState('');
   const [newScroll, setNewScroll] = useState('');
@@ -62,6 +87,12 @@ export function WorldView() {
   const [activeTab, setActiveTab] = useState('overview');
   const [loading, setLoading] = useState(true);
   const [showForkDialog, setShowForkDialog] = useState(false);
+  const [selectedRecord, setSelectedRecord] = useState<WorldRecord | null>(null);
+  const [showRecordForm, setShowRecordForm] = useState(false);
+  const [editingRecord, setEditingRecord] = useState<WorldRecord | null>(null);
+  const [showTimelineForm, setShowTimelineForm] = useState(false);
+  const [editingTimelineEntry, setEditingTimelineEntry] = useState<TimelineEntry | null>(null);
+  const [expandedCategories, setExpandedCategories] = useState<{ [key: string]: boolean }>({});
   const [forkData, setForkData] = useState({
     title: '',
     description: '',
@@ -185,11 +216,102 @@ export function WorldView() {
       );
 
       setCommunityPosts(postsWithCommentCounts);
+
+      // Fetch world records
+      const { data: recordsData, error: recordsError } = await supabase
+        .from('world_records')
+        .select('*')
+        .eq('world_id', worldId)
+        .order('created_at', { ascending: false });
+
+      if (recordsError) throw recordsError;
+      setWorldRecords(recordsData || []);
+
+      // Fetch timeline entries
+      const { data: timelineData, error: timelineError } = await supabase
+        .from('timeline_entries')
+        .select('*')
+        .eq('world_id', worldId)
+        .order('year', { ascending: true });
+
+      if (timelineError) throw timelineError;
+      setTimelineEntries(timelineData || []);
     } catch (error) {
       console.error('Error fetching world data:', error);
     } finally {
       setLoading(false);
     }
+  };
+
+  // World Records functions
+  const createWorldRecord = async (data: any) => {
+    if (!user) return;
+
+    const { error } = await supabase
+      .from('world_records')
+      .insert([{ ...data, author_id: user.id }]);
+
+    if (error) throw error;
+    setShowRecordForm(false);
+    fetchWorldData();
+  };
+
+  const updateWorldRecord = async (id: string, data: Partial<WorldRecord>) => {
+    const { error } = await supabase
+      .from('world_records')
+      .update(data)
+      .eq('id', id);
+
+    if (error) throw error;
+    fetchWorldData();
+  };
+
+  const deleteWorldRecord = async (id: string) => {
+    const { error } = await supabase
+      .from('world_records')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+    fetchWorldData();
+  };
+
+  // Timeline functions
+  const createTimelineEntry = async (data: any) => {
+    if (!user) return;
+
+    const { error } = await supabase
+      .from('timeline_entries')
+      .insert([{ ...data, author_id: user.id }]);
+
+    if (error) throw error;
+    setShowTimelineForm(false);
+    setEditingTimelineEntry(null);
+    fetchWorldData();
+  };
+
+  const updateTimelineEntry = async (data: any) => {
+    if (!editingTimelineEntry) return;
+
+    const { error } = await supabase
+      .from('timeline_entries')
+      .update(data)
+      .eq('id', editingTimelineEntry.id);
+
+    if (error) throw error;
+    setShowTimelineForm(false);
+    setEditingTimelineEntry(null);
+    fetchWorldData();
+  };
+
+  const deleteTimelineEntry = async (id: string) => {
+    const { error } = await supabase
+      .from('timeline_entries')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+    fetchWorldData();
   };
 
   const joinRole = async (roleId: string) => {
@@ -450,6 +572,22 @@ export function WorldView() {
     return text.slice(0, maxLength).trim() + '...';
   };
 
+  const toggleCategory = (category: string) => {
+    setExpandedCategories(prev => ({
+      ...prev,
+      [category]: !prev[category]
+    }));
+  };
+
+  // Group world records by category
+  const recordsByCategory = worldRecords.reduce((acc, record) => {
+    if (!acc[record.category]) {
+      acc[record.category] = [];
+    }
+    acc[record.category].push(record);
+    return acc;
+  }, {} as { [key: string]: WorldRecord[] });
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -511,6 +649,50 @@ export function WorldView() {
         </div>
       </div>
 
+      {/* Timeline Section - Below Laws */}
+      <div className="bg-gray-800 rounded-lg p-6">
+        <div className="flex justify-between items-center mb-6">
+          <h3 className="text-lg font-semibold text-white flex items-center">
+            <Clock className="h-5 w-5 mr-2" />
+            Timeline
+          </h3>
+          {isCreator && (
+            <button
+              onClick={() => setShowTimelineForm(true)}
+              className="flex items-center px-3 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Add Era
+            </button>
+          )}
+        </div>
+
+        {timelineEntries.length > 0 ? (
+          <div className="space-y-0">
+            {timelineEntries.map((entry, index) => (
+              <TimelineEntryCard
+                key={entry.id}
+                entry={entry}
+                isCreator={isCreator}
+                onEdit={(entry) => {
+                  setEditingTimelineEntry(entry);
+                  setShowTimelineForm(true);
+                }}
+                onDelete={deleteTimelineEntry}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-8">
+            <Clock className="h-12 w-12 text-gray-600 mx-auto mb-4" />
+            <p className="text-gray-400">No timeline entries yet</p>
+            {isCreator && (
+              <p className="text-gray-500 text-sm mt-2">Add eras to show the history of your world</p>
+            )}
+          </div>
+        )}
+      </div>
+
       {/* Role Selection */}
       {user && !userRole && roles.length > 0 && (
         <div className="bg-gray-800 rounded-lg p-6">
@@ -543,6 +725,7 @@ export function WorldView() {
             { id: 'community', label: 'Community', count: communityPosts.length },
             { id: 'questions', label: 'Questions', count: questions.length },
             { id: 'lore', label: 'Canon Lore', count: canonScrolls.length },
+            { id: 'records', label: '📘 World Records', count: worldRecords.length },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -885,7 +1068,107 @@ export function WorldView() {
             </div>
           </div>
         )}
+
+        {activeTab === 'records' && (
+          <div className="space-y-6">
+            {isCreator && (
+              <div className="flex justify-end">
+                <button
+                  onClick={() => setShowRecordForm(true)}
+                  className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create Record
+                </button>
+              </div>
+            )}
+
+            {Object.keys(recordsByCategory).length > 0 ? (
+              <div className="space-y-4">
+                {Object.entries(recordsByCategory).map(([category, records]) => (
+                  <div key={category} className="bg-gray-800 rounded-lg overflow-hidden">
+                    <button
+                      onClick={() => toggleCategory(category)}
+                      className="w-full px-6 py-4 bg-gray-700 hover:bg-gray-600 transition-colors flex items-center justify-between"
+                    >
+                      <div className="flex items-center space-x-3">
+                        <BookOpen className="h-5 w-5 text-indigo-400" />
+                        <h4 className="text-white font-semibold">{category}</h4>
+                        <span className="bg-gray-600 px-2 py-1 rounded text-xs text-gray-300">
+                          {records.length}
+                        </span>
+                      </div>
+                      {expandedCategories[category] ? (
+                        <ChevronDown className="h-5 w-5 text-gray-400" />
+                      ) : (
+                        <ChevronRight className="h-5 w-5 text-gray-400" />
+                      )}
+                    </button>
+                    
+                    {expandedCategories[category] && (
+                      <div className="p-6 grid md:grid-cols-2 gap-4">
+                        {records.map((record) => (
+                          <WorldRecordCard
+                            key={record.id}
+                            record={record}
+                            onView={setSelectedRecord}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-12">
+                <BookOpen className="h-12 w-12 text-gray-600 mx-auto mb-4" />
+                <p className="text-gray-400">No world records yet</p>
+                {isCreator && (
+                  <p className="text-gray-500 text-sm mt-2">Create detailed records to document your world's lore</p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </div>
+
+      {/* Modals and Forms */}
+      {selectedRecord && (
+        <WorldRecordModal
+          record={selectedRecord}
+          isCreator={isCreator}
+          onClose={() => setSelectedRecord(null)}
+          onUpdate={updateWorldRecord}
+          onDelete={deleteWorldRecord}
+        />
+      )}
+
+      {showRecordForm && (
+        <CreateEditWorldRecordForm
+          worldId={worldId!}
+          initialData={editingRecord || undefined}
+          onSubmit={editingRecord ? 
+            (data) => updateWorldRecord(editingRecord.id, data) : 
+            createWorldRecord
+          }
+          onCancel={() => {
+            setShowRecordForm(false);
+            setEditingRecord(null);
+          }}
+        />
+      )}
+
+      {showTimelineForm && (
+        <CreateEditTimelineEntryForm
+          worldId={worldId!}
+          initialData={editingTimelineEntry || undefined}
+          onSubmit={editingTimelineEntry ? updateTimelineEntry : createTimelineEntry}
+          onCancel={() => {
+            setShowTimelineForm(false);
+            setEditingTimelineEntry(null);
+          }}
+        />
+      )}
 
       {/* Enhanced Fork Dialog (keeping existing code) */}
       {showForkDialog && (
