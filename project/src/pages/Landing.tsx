@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
-import { Globe, Users, Scroll, GitBranch, ArrowRight, CheckCircle, Star, BookOpen, MessageSquare, Zap, Shield, Heart, Award, User } from 'lucide-react';
+import { Globe, Users, Scroll, GitBranch, ArrowRight, CheckCircle, Star, BookOpen, MessageSquare, Zap, Shield, Heart, Award, User, Compass } from 'lucide-react';
 
 interface World {
   id: string;
@@ -248,10 +248,11 @@ export function Landing() {
                   <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
                 </Link>
                 <Link
-                  to="/profile"
-                  className="bg-gray-700 hover:bg-gray-600 text-white px-8 py-4 rounded-lg font-semibold text-lg transition-colors"
+                  to="/explore"
+                  className="group bg-gray-700 hover:bg-gray-600 text-white px-8 py-4 rounded-lg font-semibold text-lg transition-colors flex items-center"
                 >
-                  Your Profile
+                  <Compass className="mr-2 h-5 w-5" />
+                  Explore Worlds
                 </Link>
               </>
             ) : (
@@ -264,9 +265,10 @@ export function Landing() {
                   <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
                 </Link>
                 <Link
-                  to="/login"
-                  className="bg-gray-700 hover:bg-gray-600 text-white px-8 py-4 rounded-lg font-semibold text-lg transition-colors"
+                  to="/explore"
+                  className="group bg-gray-700 hover:bg-gray-600 text-white px-8 py-4 rounded-lg font-semibold text-lg transition-colors flex items-center"
                 >
+                  <Compass className="mr-2 h-5 w-5" />
                   Explore Worlds
                 </Link>
               </>
@@ -372,9 +374,16 @@ export function Landing() {
       <section className="py-16">
         <div className="text-center mb-12">
           <h2 className="text-4xl font-bold text-white mb-4">Discover Amazing Worlds</h2>
-          <p className="text-xl text-gray-300 max-w-3xl mx-auto">
+          <p className="text-xl text-gray-300 max-w-3xl mx-auto mb-6">
             Explore worlds created by our community and find your next adventure
           </p>
+          <Link
+            to="/explore"
+            className="inline-flex items-center px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium"
+          >
+            <Compass className="h-5 w-5 mr-2" />
+            View All Worlds
+          </Link>
         </div>
 
         {loading ? (
@@ -533,10 +542,11 @@ export function Landing() {
                   <ArrowRight className="ml-3 h-6 w-6 group-hover:translate-x-1 transition-transform" />
                 </Link>
                 <Link
-                  to="/profile"
-                  className="bg-gray-700 hover:bg-gray-600 text-white px-10 py-4 rounded-lg font-semibold text-xl transition-colors"
+                  to="/explore"
+                  className="group bg-gray-700 hover:bg-gray-600 text-white px-10 py-4 rounded-lg font-semibold text-xl transition-colors flex items-center"
                 >
-                  View Your Profile
+                  <Compass className="mr-3 h-6 w-6" />
+                  Explore Worlds
                 </Link>
               </>
             ) : (
@@ -549,10 +559,11 @@ export function Landing() {
                   <ArrowRight className="ml-3 h-6 w-6 group-hover:translate-x-1 transition-transform" />
                 </Link>
                 <Link
-                  to="/login"
-                  className="bg-gray-700 hover:bg-gray-600 text-white px-10 py-4 rounded-lg font-semibold text-xl transition-colors"
+                  to="/explore"
+                  className="group bg-gray-700 hover:bg-gray-600 text-white px-10 py-4 rounded-lg font-semibold text-xl transition-colors flex items-center"
                 >
-                  Sign In
+                  <Compass className="mr-3 h-6 w-6" />
+                  Explore Worlds
                 </Link>
               </>
             )}

@@ -725,7 +725,7 @@ export function WorldView() {
             { id: 'community', label: 'Community', count: communityPosts.length },
             { id: 'questions', label: 'Questions', count: questions.length },
             { id: 'lore', label: 'Canon Lore', count: canonScrolls.length },
-            { id: 'records', label: '📘 World Records', count: worldRecords.length },
+            { id: 'records', label: 'World Records', count: worldRecords.length },
           ].map((tab) => (
             <button
               key={tab.id}

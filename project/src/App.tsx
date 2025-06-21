@@ -9,6 +9,7 @@ import { WorldDashboard } from './pages/WorldDashboard';
 import { WorldView } from './pages/WorldView';
 import { CommunityPostDetail } from './pages/CommunityPostDetail';
 import { Profile } from './pages/Profile';
+import { ExploreWorlds } from './pages/ExploreWorlds';
 
 function App() {
   const { user, loading } = useAuth();
@@ -28,6 +29,7 @@ function App() {
           <Route path="/" element={<Landing />} />
           <Route path="/login" element={<Auth />} />
           <Route path="/signup" element={<Auth />} />
+          <Route path="/explore" element={<ExploreWorlds />} />
           <Route
             path="/create-world"
             element={user ? <CreateWorld /> : <Navigate to="/login" />}
