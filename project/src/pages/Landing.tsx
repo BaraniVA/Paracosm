@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
-import { Globe, Users, Scroll, GitBranch, ArrowRight, CheckCircle, Star, BookOpen, MessageSquare, Zap, Shield, Heart, Award, User, Compass } from 'lucide-react';
+import { Globe, Users, Scroll, GitBranch, ArrowRight, CheckCircle, Star, BookOpen, MessageSquare, Zap, Shield, Heart, Award, User, Compass, AlertTriangle } from 'lucide-react';
 
 interface World {
   id: string;
@@ -214,6 +214,17 @@ export function Landing() {
 
   return (
     <div className="space-y-16">
+      {/* Maintenance Notice Banner */}
+      <div className="bg-gradient-to-r from-orange-600 to-red-600 text-white py-3 px-4 rounded-lg border-l-4 border-orange-400">
+        <div className="flex items-center justify-center space-x-3">
+          <AlertTriangle className="h-5 w-5 flex-shrink-0" />
+          <div className="text-center">
+            <span className="font-medium">Scheduled Maintenance Tonight:</span>
+            <span className="ml-2">Site will be down from 12:00 AM to 1:00 AM GMT for new updates</span>
+          </div>
+        </div>
+      </div>
+
       {/* Hero Section */}
       <section className="text-center py-20 relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-indigo-900/20 via-purple-900/10 to-gray-900/20 rounded-3xl"></div>
