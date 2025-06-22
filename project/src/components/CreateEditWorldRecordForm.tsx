@@ -1,6 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Save, X } from 'lucide-react';
 import { LinkReferenceSelector } from './LinkReferenceSelector';
+
+interface WorldRecordData {
+  title: string;
+  description: string;
+  category: string;
+  world_id: string;
+  linked_to_type: string | null;
+  linked_to_id: string | null;
+}
 
 interface CreateEditWorldRecordFormProps {
   worldId: string;
@@ -12,7 +21,7 @@ interface CreateEditWorldRecordFormProps {
     linked_to_type?: string | null;
     linked_to_id?: string | null;
   };
-  onSubmit: (data: any) => Promise<void>;
+  onSubmit: (data: WorldRecordData) => Promise<void>;
   onCancel: () => void;
 }
 
@@ -27,7 +36,47 @@ const CATEGORIES = [
   'Magic',
   'History',
   'Organizations',
-  'Other'
+  'Economy',
+  'Military',
+  'Science',
+  'Arts',
+  'Languages',
+  'Architecture',
+  'Creatures',
+  'Flora',
+  'Fauna',
+  'Mythology',
+  'Traditions',
+  'Festivals',
+  'Laws',
+  'Education',
+  'Medicine',
+  'Transportation',
+  'Communication',
+  'Sports',
+  'Entertainment',
+  'Food',
+  'Fashion',
+  'Weather',
+  'Disasters',
+  'Mysteries',
+  'Legends',
+  'Prophecies',
+  'Artifacts',
+  'Locations',
+  'Landmarks',
+  'Resources',
+  'Trade',
+  'Conflicts',
+  'Alliances',
+  'Diplomacy',
+  'Exploration',
+  'Discovery',
+  'Invention',  'Philosophy',
+  'Ethics',
+  'Customs',
+  'Other',
+  'Custom'
 ];
 
 export function CreateEditWorldRecordForm({ worldId, initialData, onSubmit, onCancel }: CreateEditWorldRecordFormProps) {
@@ -35,22 +84,44 @@ export function CreateEditWorldRecordForm({ worldId, initialData, onSubmit, onCa
     title: initialData?.title || '',
     description: initialData?.description || '',
     category: initialData?.category || 'Other',
+    customCategory: '',
     linked_to_type: initialData?.linked_to_type || '',
     linked_to_id: initialData?.linked_to_id || '',
     linked_to_name: '' // For display purposes
   });
   const [isLoading, setIsLoading] = useState(false);
-
+  const [showCustomCategory, setShowCustomCategory] = useState(false);
+  // Check if initial category is custom (not in predefined list)
+  useEffect(() => {
+    if (initialData?.category && !CATEGORIES.includes(initialData.category)) {
+      setShowCustomCategory(true);
+      setFormData(prev => ({
+        ...prev,
+        category: 'Custom',
+        customCategory: initialData.category
+      }));
+    }
+  }, [initialData]);
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.title.trim() || !formData.description.trim()) return;
+
+    // Determine the final category
+    const finalCategory = formData.category === 'Custom' && formData.customCategory.trim() 
+      ? formData.customCategory.trim() 
+      : formData.category;
+
+    if (!finalCategory || finalCategory === 'Custom') {
+      alert('Please select a category or enter a custom category name.');
+      return;
+    }
 
     setIsLoading(true);
     try {
       await onSubmit({
         title: formData.title.trim(),
         description: formData.description.trim(),
-        category: formData.category,
+        category: finalCategory,
         world_id: worldId,
         linked_to_type: formData.linked_to_type || null,
         linked_to_id: formData.linked_to_id || null
@@ -60,6 +131,16 @@ export function CreateEditWorldRecordForm({ worldId, initialData, onSubmit, onCa
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleCategoryChange = (newCategory: string) => {
+    if (newCategory === 'Custom') {
+      setShowCustomCategory(true);
+    } else {
+      setShowCustomCategory(false);
+      setFormData(prev => ({ ...prev, customCategory: '' }));
+    }
+    setFormData(prev => ({ ...prev, category: newCategory }));
   };
 
   const handleLinkSelect = (id: string, name: string) => {
@@ -108,15 +189,13 @@ export function CreateEditWorldRecordForm({ worldId, initialData, onSubmit, onCa
                 placeholder="Enter record title..."
                 required
               />
-            </div>
-
-            <div>
+            </div>            <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">
                 Category *
               </label>
               <select
                 value={formData.category}
-                onChange={(e) => setFormData(prev => ({ ...prev, category: e.target.value }))}
+                onChange={(e) => handleCategoryChange(e.target.value)}
                 className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 required
               >
@@ -124,6 +203,22 @@ export function CreateEditWorldRecordForm({ worldId, initialData, onSubmit, onCa
                   <option key={category} value={category}>{category}</option>
                 ))}
               </select>
+              
+              {showCustomCategory && (
+                <div className="mt-2">
+                  <input
+                    type="text"
+                    value={formData.customCategory}
+                    onChange={(e) => setFormData(prev => ({ ...prev, customCategory: e.target.value }))}
+                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    placeholder="Enter custom category name..."
+                    required={formData.category === 'Custom'}
+                  />
+                  <p className="text-gray-400 text-xs mt-1">
+                    Enter a unique category name for your custom record type
+                  </p>
+                </div>
+              )}
             </div>
           </div>
 
@@ -189,10 +284,9 @@ export function CreateEditWorldRecordForm({ worldId, initialData, onSubmit, onCa
               className="px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-500 transition-colors"
             >
               Cancel
-            </button>
-            <button
+            </button>            <button
               type="submit"
-              disabled={isLoading || !formData.title.trim() || !formData.description.trim()}
+              disabled={isLoading || !formData.title.trim() || !formData.description.trim() || (formData.category === 'Custom' && !formData.customCategory.trim())}
               className="flex items-center px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               <Save className="h-4 w-4 mr-2" />

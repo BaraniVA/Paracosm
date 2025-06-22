@@ -2,12 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
-import { ArrowUp, MessageSquare, Scroll, GitBranch, Settings, Users, Send, Plus, X, MessageCircle, BookOpen, Clock, ChevronDown, ChevronRight } from 'lucide-react';
+import { ArrowUp, MessageSquare, Scroll, GitBranch, Settings, Users, Send, Plus, X, MessageCircle, BookOpen, ChevronDown, ChevronRight } from 'lucide-react';
 import { WorldRecordCard } from '../components/WorldRecordCard';
 import { WorldRecordModal } from '../components/WorldRecordModal';
 import { CreateEditWorldRecordForm } from '../components/CreateEditWorldRecordForm';
-import { TimelineEntryCard } from '../components/TimelineEntryCard';
+import { TimelineView } from '../components/TimelineView';
 import { CreateEditTimelineEntryForm } from '../components/CreateEditTimelineEntryForm';
+import { VotingSystem } from '../components/VotingSystem';
 
 interface World {
   id: string;
@@ -22,6 +23,7 @@ interface Role {
   id: string;
   name: string;
   description: string;
+  created_at?: string;
 }
 
 interface Question {
@@ -65,7 +67,13 @@ interface TimelineEntry {
   id: string;
   era_title: string;
   year: string;
+  event_title?: string;
   description: string;
+  tag?: string;
+  location?: string;
+  roles_involved?: string[];
+  is_private?: boolean;
+  subnotes?: string[];
   created_at: string;
 }
 
@@ -81,6 +89,8 @@ export function WorldView() {
   const [worldRecords, setWorldRecords] = useState<WorldRecord[]>([]);
   const [timelineEntries, setTimelineEntries] = useState<TimelineEntry[]>([]);
   const [userRole, setUserRole] = useState<string | null>(null);
+  const [userJoinedAt, setUserJoinedAt] = useState<string | null>(null);
+  const [newRoles, setNewRoles] = useState<Role[]>([]);
   const [newQuestion, setNewQuestion] = useState('');
   const [newScroll, setNewScroll] = useState('');
   const [newPost, setNewPost] = useState({ title: '', content: '' });
@@ -133,7 +143,7 @@ export function WorldView() {
       // Fetch roles
       const { data: rolesData, error: rolesError } = await supabase
         .from('roles')
-        .select('*')
+        .select('*, created_at')
         .eq('world_id', worldId);
 
       if (rolesError) throw rolesError;
@@ -148,16 +158,29 @@ export function WorldView() {
         }))
       }));
 
-      // Check if user has a role
+      // Check if user has a role and when they joined
       if (user) {
         const { data: inhabitantData } = await supabase
           .from('inhabitants')
-          .select('role_id')
+          .select('role_id, joined_at')
           .eq('world_id', worldId)
           .eq('user_id', user.id)
           .single();
 
-        setUserRole(inhabitantData?.role_id || null);
+        if (inhabitantData) {
+          setUserRole(inhabitantData.role_id);
+          setUserJoinedAt(inhabitantData.joined_at);
+
+          // Find new roles created after user joined
+          const newRolesForUser = (rolesData || []).filter(role => 
+            role.created_at && new Date(role.created_at) > new Date(inhabitantData.joined_at)
+          );
+          setNewRoles(newRolesForUser);
+        } else {
+          setUserRole(null);
+          setUserJoinedAt(null);
+          setNewRoles([]);
+        }
       }
 
       // Fetch questions
@@ -335,6 +358,25 @@ export function WorldView() {
     }
   };
 
+  const switchRole = async (newRoleId: string) => {
+    if (!user || !worldId || !userRole) return;
+
+    try {
+      const { error } = await supabase
+        .from('inhabitants')
+        .update({ role_id: newRoleId })
+        .eq('user_id', user.id)
+        .eq('world_id', worldId);
+
+      if (error) throw error;
+      setUserRole(newRoleId);
+      // Remove the switched role from new roles list
+      setNewRoles(prev => prev.filter(role => role.id !== newRoleId));
+    } catch (error) {
+      console.error('Error switching role:', error);
+    }
+  };
+
   const submitQuestion = async () => {
     if (!user || !worldId || !newQuestion.trim()) return;
 
@@ -402,42 +444,24 @@ export function WorldView() {
     }
   };
 
-  const upvoteQuestion = async (questionId: string) => {
-    if (!user) return;
-
-    try {
-      const question = questions.find(q => q.id === questionId);
-      if (!question) return;
-
-      const { error } = await supabase
-        .from('questions')
-        .update({ upvotes: question.upvotes + 1 })
-        .eq('id', questionId);
-
-      if (error) throw error;
-      fetchWorldData();
-    } catch (error) {
-      console.error('Error upvoting question:', error);
-    }
+  const handleQuestionVoteChange = (questionId: string, newVoteCount: number) => {
+    setQuestions(prevQuestions => 
+      prevQuestions.map(question => 
+        question.id === questionId 
+          ? { ...question, upvotes: newVoteCount }
+          : question
+      )
+    );
   };
 
-  const upvotePost = async (postId: string) => {
-    if (!user) return;
-
-    try {
-      const post = communityPosts.find(p => p.id === postId);
-      if (!post) return;
-
-      const { error } = await supabase
-        .from('community_posts')
-        .update({ upvotes: post.upvotes + 1 })
-        .eq('id', postId);
-
-      if (error) throw error;
-      fetchWorldData();
-    } catch (error) {
-      console.error('Error upvoting post:', error);
-    }
+  const handlePostVoteChange = (postId: string, newVoteCount: number) => {
+    setCommunityPosts(prevPosts => 
+      prevPosts.map(post => 
+        post.id === postId 
+          ? { ...post, upvotes: newVoteCount }
+          : post
+      )
+    );
   };
 
   // Fork functionality (keeping existing code)
@@ -651,47 +675,82 @@ export function WorldView() {
 
       {/* Timeline Section - Below Laws */}
       <div className="bg-gray-800 rounded-lg p-6">
-        <div className="flex justify-between items-center mb-6">
-          <h3 className="text-lg font-semibold text-white flex items-center">
-            <Clock className="h-5 w-5 mr-2" />
-            Timeline
-          </h3>
-          {isCreator && (
-            <button
-              onClick={() => setShowTimelineForm(true)}
-              className="flex items-center px-3 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Add Era
-            </button>
-          )}
-        </div>
-
-        {timelineEntries.length > 0 ? (
-          <div className="space-y-0">
-            {timelineEntries.map((entry, index) => (
-              <TimelineEntryCard
-                key={entry.id}
-                entry={entry}
-                isCreator={isCreator}
-                onEdit={(entry) => {
-                  setEditingTimelineEntry(entry);
-                  setShowTimelineForm(true);
-                }}
-                onDelete={deleteTimelineEntry}
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="text-center py-8">
-            <Clock className="h-12 w-12 text-gray-600 mx-auto mb-4" />
-            <p className="text-gray-400">No timeline entries yet</p>
-            {isCreator && (
-              <p className="text-gray-500 text-sm mt-2">Add eras to show the history of your world</p>
-            )}
-          </div>
-        )}
+        <TimelineView
+          entries={timelineEntries}
+          isCreator={isCreator}
+          showPrivate={isCreator}
+          onEdit={(entry: TimelineEntry) => {
+            setEditingTimelineEntry(entry);
+            setShowTimelineForm(true);
+          }}
+          onDelete={deleteTimelineEntry}
+          onCreateNew={isCreator ? () => setShowTimelineForm(true) : undefined}
+          availableRoles={roles}
+        />
       </div>
+
+      {/* New Roles Notification for Existing Inhabitants */}
+      {user && userRole && newRoles.length > 0 && (
+        <div className="bg-gray-800 rounded-lg p-6 border border-indigo-500">
+          <div className="flex items-start justify-between mb-4">
+            <div>
+              <h3 className="text-lg font-semibold text-white mb-2 flex items-center">
+                <Users className="h-5 w-5 mr-2" />
+                <span className="inline-flex items-center px-2 py-1 bg-indigo-600 text-xs font-medium text-white rounded-full mr-3">
+                  NEW
+                </span>
+                New Roles Available!
+              </h3>
+              <p className="text-gray-300 text-sm">
+                The world creator has added {newRoles.length} new role{newRoles.length > 1 ? 's' : ''} since you joined. 
+                You can switch to any of these roles if they interest you more than your current role.
+              </p>
+            </div>
+          </div>
+          
+          <div className="grid md:grid-cols-2 gap-4">
+            {newRoles.map((role) => {
+              const currentRole = roles.find(r => r.id === userRole);
+              return (
+                <div key={role.id} className="p-4 bg-gray-700 rounded-lg border border-gray-600 hover:border-indigo-500 transition-colors">
+                  <div className="flex justify-between items-start mb-3">
+                    <h4 className="font-medium text-white">{role.name}</h4>
+                    <span className="text-xs text-indigo-400 bg-indigo-900 px-2 py-1 rounded">
+                      Added {new Date(role.created_at!).toLocaleDateString()}
+                    </span>
+                  </div>
+                  <p className="text-gray-300 text-sm mb-4 leading-relaxed">{role.description}</p>
+                  
+                  {currentRole && (
+                    <div className="mb-4 p-3 bg-gray-600 rounded border border-gray-500">
+                      <p className="text-xs text-gray-300">
+                        Currently: <span className="text-white font-medium">{currentRole.name}</span>
+                      </p>
+                    </div>
+                  )}
+                  
+                  <button
+                    onClick={() => {
+                      if (confirm(`Are you sure you want to switch from "${currentRole?.name}" to "${role.name}"? This will change your role in this world.`)) {
+                        switchRole(role.id);
+                      }
+                    }}
+                    className="w-full px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium"
+                  >
+                    Switch to {role.name}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+          
+          <div className="mt-4 pt-4 border-t border-gray-700">
+            <p className="text-gray-400 text-xs">
+              💡 Tip: Switching roles will update your permissions and how others see you in this world. You can only have one role at a time.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Role Selection */}
       {user && !userRole && roles.length > 0 && (
@@ -883,14 +942,12 @@ export function WorldView() {
                         </p>
                       </div>
                     </div>
-                    <button
-                      onClick={() => upvotePost(post.id)}
-                      disabled={!user}
-                      className="flex items-center space-x-2 px-3 py-1.5 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 disabled:cursor-not-allowed transition-colors"
-                    >
-                      <ArrowUp className="h-4 w-4" />
-                      <span className="font-medium">{post.upvotes}</span>
-                    </button>
+                    <VotingSystem
+                      targetType="community_post"
+                      targetId={post.id}
+                      currentVotes={post.upvotes}
+                      onVoteChange={(newVoteCount) => handlePostVoteChange(post.id, newVoteCount)}
+                    />
                   </div>
                   
                   <Link to={`/world/${worldId}/community/${post.id}`} className="block">
@@ -978,14 +1035,12 @@ export function WorldView() {
                         </p>
                       </div>
                     </div>
-                    <button
-                      onClick={() => upvoteQuestion(question.id)}
-                      disabled={!user}
-                      className="flex items-center space-x-2 px-3 py-1.5 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 disabled:cursor-not-allowed transition-colors"
-                    >
-                      <ArrowUp className="h-4 w-4" />
-                      <span className="font-medium">{question.upvotes}</span>
-                    </button>
+                    <VotingSystem
+                      targetType="question"
+                      targetId={question.id}
+                      currentVotes={question.upvotes}
+                      onVoteChange={(newVoteCount) => handleQuestionVoteChange(question.id, newVoteCount)}
+                    />
                   </div>
                   <h4 className="text-white font-medium mb-3 leading-relaxed">{question.question_text}</h4>
                   {question.answer && (
@@ -1167,6 +1222,7 @@ export function WorldView() {
             setShowTimelineForm(false);
             setEditingTimelineEntry(null);
           }}
+          availableRoles={roles}
         />
       )}
 

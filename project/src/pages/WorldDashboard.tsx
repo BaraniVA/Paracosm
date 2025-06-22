@@ -2,9 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
-import { Users, MessageSquare, Scroll, GitBranch, Settings, Check, X, Trash2, ArrowUp, Edit, Save, Plus, BookOpen, Clock } from 'lucide-react';
+import { Users, MessageSquare, Scroll, GitBranch, Settings, Check, X, Trash2, ArrowUp, Edit, Save, Plus, BookOpen } from 'lucide-react';
 import { CreateEditWorldRecordForm } from '../components/CreateEditWorldRecordForm';
+import { TimelineView } from '../components/TimelineView';
 import { CreateEditTimelineEntryForm } from '../components/CreateEditTimelineEntryForm';
+import { InhabitantManagement } from '../components/InhabitantManagement';
 
 interface World {
   id: string;
@@ -61,7 +63,13 @@ interface TimelineEntry {
   id: string;
   era_title: string;
   year: string;
+  event_title?: string;
   description: string;
+  tag?: string;
+  location?: string;
+  roles_involved?: string[];
+  is_private?: boolean;
+  subnotes?: string[];
   created_at: string;
 }
 
@@ -999,65 +1007,18 @@ export function WorldDashboard() {
 
       {/* Timeline Management */}
       <div className="bg-gray-800 rounded-lg p-6">
-        <div className="flex justify-between items-center mb-6">
-          <h3 className="text-lg font-semibold text-white flex items-center">
-            <Clock className="h-5 w-5 mr-2" />
-            Manage Timeline
-          </h3>
-          <button
-            onClick={() => setShowTimelineForm(true)}
-            className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Add Era
-          </button>
-        </div>
-
-        {timelineEntries.length > 0 ? (
-          <div className="space-y-3">
-            {timelineEntries.map((entry) => (
-              <div key={entry.id} className="bg-gray-700 rounded-lg p-4">
-                <div className="flex justify-between items-start mb-3">
-                  <div className="flex-1">
-                    <div className="flex items-center space-x-3 mb-2">
-                      <span className="text-indigo-400 font-mono text-sm font-bold">{entry.year}</span>
-                      <h4 className="font-medium text-white">{entry.era_title}</h4>
-                    </div>
-                    <p className="text-gray-300 text-sm leading-relaxed">
-                      {entry.description}
-                    </p>
-                  </div>
-                  <div className="flex space-x-2 ml-4">
-                    <button
-                      onClick={() => {
-                        setEditingTimelineEntry(entry);
-                        setShowTimelineForm(true);
-                      }}
-                      className="p-2 text-gray-400 hover:text-indigo-400 transition-colors"
-                    >
-                      <Edit className="h-4 w-4" />
-                    </button>
-                    <button
-                      onClick={() => deleteTimelineEntry(entry.id)}
-                      className="p-2 text-gray-400 hover:text-red-400 transition-colors"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                </div>
-                <div className="text-xs text-gray-400">
-                  Added {new Date(entry.created_at).toLocaleDateString()}
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="text-center py-8">
-            <Clock className="h-12 w-12 text-gray-600 mx-auto mb-4" />
-            <p className="text-gray-400 mb-4">No timeline entries yet</p>
-            <p className="text-gray-500 text-sm">Add eras to show the history of your world</p>
-          </div>
-        )}
+        <TimelineView
+          entries={timelineEntries}
+          isCreator={true}
+          showPrivate={true}
+          onEdit={(entry: TimelineEntry) => {
+            setEditingTimelineEntry(entry);
+            setShowTimelineForm(true);
+          }}
+          onDelete={deleteTimelineEntry}
+          onCreateNew={() => setShowTimelineForm(true)}
+          availableRoles={roles}
+        />
       </div>
 
       {/* Stats Bar */}
@@ -1291,40 +1252,11 @@ export function WorldDashboard() {
         )}
 
         {activeTab === 'inhabitants' && (
-          <div>
-            {inhabitants.length === 0 ? (
-              <div className="text-center py-12">
-                <Users className="h-12 w-12 text-gray-600 mx-auto mb-4" />
-                <p className="text-gray-400">No inhabitants yet</p>
-              </div>
-            ) : (
-              <div className="bg-gray-800 rounded-lg overflow-hidden">
-                <div className="px-6 py-4 border-b border-gray-700">
-                  <h3 className="text-lg font-medium text-white">World Inhabitants</h3>
-                </div>
-                <div className="divide-y divide-gray-700">
-                  {inhabitants.map((inhabitant) => (
-                    <div key={inhabitant.id} className="px-6 py-4 flex items-center justify-between">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-10 h-10 bg-indigo-600 rounded-full flex items-center justify-center">
-                          <span className="text-white font-medium">
-                            {inhabitant.user.username[0].toUpperCase()}
-                          </span>
-                        </div>
-                        <div>
-                          <p className="text-white font-medium">{inhabitant.user.username}</p>
-                          <p className="text-gray-400 text-sm">{inhabitant.role.name}</p>
-                        </div>
-                      </div>
-                      <p className="text-gray-400 text-sm">
-                        Joined {new Date(inhabitant.joined_at).toLocaleDateString()}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
+          <InhabitantManagement 
+            worldId={worldId!}
+            isCreator={true}
+            onInhabitantKicked={fetchWorldData}
+          />
         )}
       </div>
 
@@ -1350,6 +1282,7 @@ export function WorldDashboard() {
             setShowTimelineForm(false);
             setEditingTimelineEntry(null);
           }}
+          availableRoles={roles}
         />
       )}
     </div>

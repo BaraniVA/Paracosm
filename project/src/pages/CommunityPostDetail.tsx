@@ -3,7 +3,8 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 import { CommentThread } from '../components/CommentThread';
-import { ArrowLeft, ArrowUp, MessageCircle, Calendar, User } from 'lucide-react';
+import { VotingSystem } from '../components/VotingSystem';
+import { ArrowLeft, MessageCircle, Calendar, User } from 'lucide-react';
 
 interface CommunityPost {
   id: string;
@@ -113,21 +114,9 @@ export function CommunityPostDetail() {
       console.error('Error deleting comment:', error);
       throw error;
     }
-  };
-
-  const upvotePost = async () => {
-    if (!user || !post) return;
-
-    try {
-      const { error } = await supabase
-        .from('community_posts')
-        .update({ upvotes: post.upvotes + 1 })
-        .eq('id', postId);
-
-      if (error) throw error;
-      fetchPostData(); // Refresh post data
-    } catch (error) {
-      console.error('Error upvoting post:', error);
+  };  const handleVoteChange = (newVoteCount: number) => {
+    if (post) {
+      setPost({ ...post, upvotes: newVoteCount });
     }
   };
 
@@ -185,16 +174,12 @@ export function CommunityPostDetail() {
                 <span>{new Date(post.created_at).toLocaleTimeString()}</span>
               </div>
             </div>
-          </div>
-          
-          <button
-            onClick={upvotePost}
-            disabled={!user}
-            className="flex items-center space-x-2 px-4 py-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 disabled:cursor-not-allowed transition-colors"
-          >
-            <ArrowUp className="h-5 w-5" />
-            <span className="font-semibold">{post.upvotes}</span>
-          </button>
+          </div>          <VotingSystem
+            targetType="community_post"
+            targetId={post.id}
+            currentVotes={post.upvotes}
+            onVoteChange={handleVoteChange}
+          />
         </div>
 
         <h1 className="text-2xl font-bold text-white mb-4">{post.title}</h1>

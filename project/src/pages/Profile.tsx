@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
-import { Globe, Users, Scroll, MessageSquare, Calendar } from 'lucide-react';
+import { ProfilePictureUpload } from '../components/ProfilePictureUpload';
+import { Globe, Users, Scroll, MessageSquare, Calendar, Edit, Save, X } from 'lucide-react';
 
 interface World {
   id: string;
@@ -52,12 +53,44 @@ export function Profile() {
   const [userScrolls, setUserScrolls] = useState<UserScroll[]>([]);
   const [userQuestions, setUserQuestions] = useState<UserQuestion[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isEditing, setIsEditing] = useState(false);
+  const [profileData, setProfileData] = useState({
+    username: '',
+    bio: '',
+    bio_extended: '',
+    profile_picture_url: ''
+  });
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (user) {
       fetchUserData();
+      fetchUserProfile();
     }
   }, [user]);
+
+  const fetchUserProfile = async () => {
+    if (!user) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('username, bio, bio_extended, profile_picture_url')
+        .eq('id', user.id)
+        .single();
+
+      if (error) throw error;
+
+      setProfileData({
+        username: data.username || '',
+        bio: data.bio || '',
+        bio_extended: data.bio_extended || '',
+        profile_picture_url: data.profile_picture_url || ''
+      });
+    } catch (error) {
+      console.error('Error fetching user profile:', error);
+    }
+  };
 
   const fetchUserData = async () => {
     if (!user) return;
@@ -152,6 +185,32 @@ export function Profile() {
     }
   };
 
+  const handleSaveProfile = async () => {
+    if (!user) return;
+
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from('users')
+        .update({
+          username: profileData.username,
+          bio: profileData.bio,
+          bio_extended: profileData.bio_extended,
+          profile_picture_url: profileData.profile_picture_url
+        })
+        .eq('id', user.id);
+
+      if (error) throw error;
+
+      setIsEditing(false);
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      alert('Failed to update profile. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   if (!user) {
     return (
       <div className="text-center py-12">
@@ -173,23 +232,119 @@ export function Profile() {
 
   return (
     <div className="space-y-8">
-      {/* Profile Header */}
+      {/* Enhanced Profile Header */}
       <div className="bg-gray-800 rounded-lg p-6">
-        <div className="flex items-center space-x-4">
-          <div className="w-16 h-16 bg-indigo-600 rounded-full flex items-center justify-center">
-            <span className="text-2xl font-bold text-white">
-              {user.user_metadata?.username?.[0]?.toUpperCase() || user.email?.[0]?.toUpperCase()}
-            </span>
+        <div className="flex flex-col md:flex-row items-start md:items-center space-y-4 md:space-y-0 md:space-x-6">
+          {/* Profile Picture */}
+          <div className="flex-shrink-0">
+            {isEditing ? (
+              <ProfilePictureUpload
+                currentImageUrl={profileData.profile_picture_url}
+                onImageChange={(url) => setProfileData(prev => ({ ...prev, profile_picture_url: url }))}
+              />
+            ) : (
+              <div className="w-24 h-24 rounded-full overflow-hidden bg-indigo-600 flex items-center justify-center">
+                {profileData.profile_picture_url ? (
+                  <img
+                    src={profileData.profile_picture_url}
+                    alt="Profile"
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <span className="text-2xl font-bold text-white">
+                    {profileData.username?.[0]?.toUpperCase() || user.email?.[0]?.toUpperCase()}
+                  </span>
+                )}
+              </div>
+            )}
           </div>
-          <div>
-            <h1 className="text-2xl font-bold text-white">
-              {user.user_metadata?.username || 'User'}
-            </h1>
-            <p className="text-gray-400">{user.email}</p>
-            <p className="text-gray-400 text-sm">
-              <Calendar className="h-4 w-4 inline mr-1" />
-              Joined {new Date(user.created_at).toLocaleDateString()}
-            </p>
+
+          {/* Profile Info */}
+          <div className="flex-1">
+            {isEditing ? (
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">Username</label>
+                  <input
+                    type="text"
+                    value={profileData.username}
+                    onChange={(e) => setProfileData(prev => ({ ...prev, username: e.target.value }))}
+                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">Short Bio</label>
+                  <input
+                    type="text"
+                    value={profileData.bio}
+                    onChange={(e) => setProfileData(prev => ({ ...prev, bio: e.target.value }))}
+                    placeholder="A brief description about yourself..."
+                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">Extended Bio</label>
+                  <textarea
+                    value={profileData.bio_extended}
+                    onChange={(e) => setProfileData(prev => ({ ...prev, bio_extended: e.target.value }))}
+                    rows={4}
+                    placeholder="Tell us more about yourself, your interests, and your world-building experience..."
+                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                  />
+                </div>
+              </div>
+            ) : (
+              <div>
+                <h1 className="text-2xl font-bold text-white mb-2">
+                  {profileData.username || 'User'}
+                </h1>
+                <p className="text-gray-400 mb-2">{user.email}</p>
+                {profileData.bio && (
+                  <p className="text-gray-300 mb-2">{profileData.bio}</p>
+                )}
+                {profileData.bio_extended && (
+                  <p className="text-gray-300 text-sm leading-relaxed mb-2">{profileData.bio_extended}</p>
+                )}
+                <p className="text-gray-400 text-sm">
+                  <Calendar className="h-4 w-4 inline mr-1" />
+                  Joined {new Date(user.created_at).toLocaleDateString()}
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Edit Button */}
+          <div className="flex-shrink-0">
+            {isEditing ? (
+              <div className="flex space-x-2">
+                <button
+                  onClick={handleSaveProfile}
+                  disabled={saving}
+                  className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors"
+                >
+                  <Save className="h-4 w-4 mr-2" />
+                  {saving ? 'Saving...' : 'Save'}
+                </button>
+                <button
+                  onClick={() => {
+                    setIsEditing(false);
+                    fetchUserProfile(); // Reset to original data
+                  }}
+                  className="flex items-center px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-500 transition-colors"
+                >
+                  <X className="h-4 w-4 mr-2" />
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setIsEditing(true)}
+                className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+              >
+                <Edit className="h-4 w-4 mr-2" />
+                Edit Profile
+              </button>
+            )}
           </div>
         </div>
       </div>
