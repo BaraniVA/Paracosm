@@ -54,17 +54,20 @@ export function TimelineView({
     acc[entry.era_title].push(entry);
     return acc;
   }, {} as { [key: string]: TimelineEntry[] });
-
-  // Sort eras and entries within each era
-  const sortedEras = Object.keys(entriesByEra).sort();
-  
-  // Sort entries within each era by year (try to parse as number, fallback to string)
+  // Sort entries within each era by year first
   Object.keys(entriesByEra).forEach(era => {
     entriesByEra[era].sort((a, b) => {
       const yearA = parseFloat(a.year.replace(/[^\d.-]/g, '')) || 0;
       const yearB = parseFloat(b.year.replace(/[^\d.-]/g, '')) || 0;
       return yearA - yearB;
     });
+  });
+
+  // Sort eras chronologically by their earliest year
+  const sortedEras = Object.keys(entriesByEra).sort((eraA, eraB) => {
+    const earliestYearA = parseFloat(entriesByEra[eraA][0]?.year.replace(/[^\d.-]/g, '') || '0') || 0;
+    const earliestYearB = parseFloat(entriesByEra[eraB][0]?.year.replace(/[^\d.-]/g, '') || '0') || 0;
+    return earliestYearA - earliestYearB;
   });
 
   const toggleEra = (era: string) => {
@@ -84,6 +87,23 @@ export function TimelineView({
     const totalEvents = eraEntries.length;
     const privateEvents = eraEntries.filter(entry => entry.is_private).length;
     return { totalEvents, privateEvents };
+  };
+
+  const getEraYearRange = (era: string) => {
+    const eraEntries = entriesByEra[era];
+    if (eraEntries.length === 0) return '';
+    
+    const years = eraEntries.map(entry => 
+      parseFloat(entry.year.replace(/[^\d.-]/g, '')) || 0
+    ).filter(year => year !== 0);
+    
+    if (years.length === 0) return '';
+    
+    const minYear = Math.min(...years);
+    const maxYear = Math.max(...years);
+    
+    if (minYear === maxYear) return minYear.toString();
+    return `${minYear} - ${maxYear}`;
   };
 
   if (filteredEntries.length === 0) {
@@ -147,7 +167,8 @@ export function TimelineView({
                 onChange={(e) => setFilterTag(e.target.value)}
                 className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
               >
-                <option value="all">All Tags</option>                {getUniqueTagsFromEntries().map(tag => (
+                <option value="all">All Tags</option>               
+                 {getUniqueTagsFromEntries().map(tag => (
                   <option key={tag} value={tag}>
                     {tag ? tag.charAt(0).toUpperCase() + tag.slice(1) : 'Unknown'}
                   </option>
@@ -174,8 +195,14 @@ export function TimelineView({
                     <ChevronDown className="h-5 w-5 text-gray-400" />
                   ) : (
                     <ChevronRight className="h-5 w-5 text-gray-400" />
-                  )}
-                  <h3 className="text-lg font-semibold text-white">{era}</h3>
+                  )}                  <h3 className="text-lg font-semibold text-white">
+                    {era}
+                    {getEraYearRange(era) && (
+                      <span className="text-sm text-gray-400 font-normal ml-2">
+                        ({getEraYearRange(era)})
+                      </span>
+                    )}
+                  </h3>
                   <span className="text-sm text-gray-400">
                     {totalEvents} event{totalEvents !== 1 ? 's' : ''}
                     {privateEvents > 0 && isCreator && (
