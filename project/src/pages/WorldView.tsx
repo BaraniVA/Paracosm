@@ -2,13 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
-import { ArrowUp, MessageSquare, Scroll, GitBranch, Settings, Users, Send, Plus, X, MessageCircle, BookOpen, ChevronDown, ChevronRight } from 'lucide-react';
+import { ArrowUp, MessageSquare, Scroll, GitBranch, Settings, Users, Send, Plus, X, MessageCircle, BookOpen, ChevronDown, ChevronRight, Share } from 'lucide-react';
 import { WorldRecordCard } from '../components/WorldRecordCard';
 import { WorldRecordModal } from '../components/WorldRecordModal';
 import { CreateEditWorldRecordForm } from '../components/CreateEditWorldRecordForm';
 import { TimelineView } from '../components/TimelineView';
 import { CreateEditTimelineEntryForm } from '../components/CreateEditTimelineEntryForm';
 import { VotingSystem } from '../components/VotingSystem';
+import { WorldShareCard } from '../components/WorldShareCard';
 
 interface World {
   id: string;
@@ -93,8 +94,8 @@ export function WorldView() {
   const [newScroll, setNewScroll] = useState('');
   const [newPost, setNewPost] = useState({ title: '', content: '' });
   const [activeTab, setActiveTab] = useState('overview');
-  const [loading, setLoading] = useState(true);
-  const [showForkDialog, setShowForkDialog] = useState(false);
+  const [loading, setLoading] = useState(true);  const [showForkDialog, setShowForkDialog] = useState(false);
+  const [showShareCard, setShowShareCard] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState<WorldRecord | null>(null);
   const [showRecordForm, setShowRecordForm] = useState(false);
   const [editingRecord, setEditingRecord] = useState<WorldRecord | null>(null);
@@ -655,8 +656,14 @@ export function WorldView() {
             <p className="text-gray-400">
               Created by <span className="text-indigo-400 font-medium">{world.creator.username}</span>
             </p>
-          </div>
-          <div className="flex space-x-3">
+          </div>          <div className="flex space-x-3">
+            <button 
+              onClick={() => setShowShareCard(true)}
+              className="flex items-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium"
+            >
+              <Share className="h-4 w-4 mr-2" />
+              Share
+            </button>
             {isCreator && (
               <Link
                 to={`/world/${worldId}/dashboard`}
@@ -1235,9 +1242,7 @@ export function WorldView() {
             setEditingRecord(null);
           }}
         />
-      )}
-
-      {showTimelineForm && (
+      )}      {showTimelineForm && (
         <CreateEditTimelineEntryForm
           worldId={worldId!}
           initialData={editingTimelineEntry || undefined}
@@ -1247,6 +1252,7 @@ export function WorldView() {
             setEditingTimelineEntry(null);
           }}
           availableRoles={roles}
+          existingEras={timelineEntries.map(entry => entry.era_title)}
         />
       )}
 
@@ -1440,10 +1446,18 @@ export function WorldView() {
                 className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
               >
                 Fork World
-              </button>
-            </div>
+              </button>            </div>
           </div>
         </div>
+      )}
+
+      {/* World Share Card */}
+      {world && (
+        <WorldShareCard
+          world={world}
+          isOpen={showShareCard}
+          onClose={() => setShowShareCard(false)}
+        />
       )}
     </div>
   );

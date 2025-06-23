@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Save, X, Plus, Minus, EyeOff } from 'lucide-react';
+import { EraAutocomplete } from './EraAutocomplete';
 
 interface CreateEditTimelineEntryFormProps {
   worldId: string;
@@ -18,6 +19,7 @@ interface CreateEditTimelineEntryFormProps {
   onSubmit: (data: any) => Promise<void>;
   onCancel: () => void;
   availableRoles?: Array<{ id: string; name: string }>;
+  existingEras?: string[];
 }
 
 const tagOptions = [
@@ -51,7 +53,8 @@ export function CreateEditTimelineEntryForm({
   initialData, 
   onSubmit, 
   onCancel, 
-  availableRoles = [] 
+  availableRoles = [],
+  existingEras = []
 }: CreateEditTimelineEntryFormProps) {
   const [formData, setFormData] = useState({
     era_title: initialData?.era_title || '',
@@ -131,16 +134,14 @@ export function CreateEditTimelineEntryForm({
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="grid md:grid-cols-2 gap-4">
-            <div>
+          <div className="grid md:grid-cols-2 gap-4">            <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">
                 Era Title *
               </label>
-              <input
-                type="text"
+              <EraAutocomplete
                 value={formData.era_title}
-                onChange={(e) => setFormData(prev => ({ ...prev, era_title: e.target.value }))}
-                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                onChange={(value) => setFormData(prev => ({ ...prev, era_title: value }))}
+                existingEras={existingEras}
                 placeholder="The Golden Age"
                 required
               />

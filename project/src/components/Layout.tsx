@@ -157,7 +157,6 @@ export function Layout({ children }: LayoutProps) {
                 <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Discord</a></li>
                 <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Twitter</a></li>
                 <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Reddit</a></li>
-                <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Blog</a></li>
               </ul>
             </div>
             

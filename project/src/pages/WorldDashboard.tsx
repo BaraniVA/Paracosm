@@ -639,10 +639,9 @@ export function WorldDashboard() {
   const pendingScrolls = allScrolls.filter(s => !s.is_canon);
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
-      {/* Header */}
+    <div className="max-w-6xl mx-auto space-y-6">      {/* Header */}
       <div className="flex items-center justify-between">
-        <div>
+        <div className="flex-1 min-w-0">
           {/* Editable Title */}
           {editingTitle ? (
             <div className="flex items-center space-x-3 mb-2">
@@ -677,19 +676,18 @@ export function WorldDashboard() {
                 onClick={() => setEditingTitle(true)}
                 className="p-1 text-gray-400 hover:text-white transition-colors"
               >
-                <Edit className="h-4 w-4" />
-              </button>
+                <Edit className="h-4 w-4" />              </button>
             </div>
           )}
 
           {/* Editable Description */}
           {editingDescription ? (
-            <div className="space-y-2 mb-2">
+            <div className="space-y-2 mb-2 w-full max-w-4xl">
               <textarea
                 value={editedDescription}
                 onChange={(e) => setEditedDescription(e.target.value)}
-                rows={3}
-                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none"
+                rows={4}
+                className="w-full min-w-0 bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none"
                 onKeyPress={(e) => {
                   if (e.key === 'Escape') cancelEditDescription();
                 }}
@@ -1271,9 +1269,7 @@ export function WorldDashboard() {
             setEditingRecord(null);
           }}
         />
-      )}
-
-      {showTimelineForm && (
+      )}      {showTimelineForm && (
         <CreateEditTimelineEntryForm
           worldId={worldId!}
           initialData={editingTimelineEntry || undefined}
@@ -1283,6 +1279,7 @@ export function WorldDashboard() {
             setEditingTimelineEntry(null);
           }}
           availableRoles={roles}
+          existingEras={timelineEntries.map(entry => entry.era_title)}
         />
       )}
     </div>
