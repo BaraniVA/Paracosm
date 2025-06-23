@@ -86,10 +86,8 @@ export function WorldView() {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [scrolls, setScrolls] = useState<ScrollItem[]>([]);
   const [communityPosts, setCommunityPosts] = useState<CommunityPost[]>([]);
-  const [worldRecords, setWorldRecords] = useState<WorldRecord[]>([]);
-  const [timelineEntries, setTimelineEntries] = useState<TimelineEntry[]>([]);
-  const [userRole, setUserRole] = useState<string | null>(null);
-  const [userJoinedAt, setUserJoinedAt] = useState<string | null>(null);
+  const [worldRecords, setWorldRecords] = useState<WorldRecord[]>([]);  const [timelineEntries, setTimelineEntries] = useState<TimelineEntry[]>([]);  const [userRole, setUserRole] = useState<string | null>(null);
+  const [userLastRoleCheck, setUserLastRoleCheck] = useState<string | null>(null);
   const [newRoles, setNewRoles] = useState<Role[]>([]);
   const [newQuestion, setNewQuestion] = useState('');
   const [newScroll, setNewScroll] = useState('');
@@ -156,29 +154,28 @@ export function WorldView() {
           name: role.name,
           description: role.description
         }))
-      }));
-
-      // Check if user has a role and when they joined
+      }));      // Check if user has a role and when they joined
       if (user) {
         const { data: inhabitantData } = await supabase
           .from('inhabitants')
-          .select('role_id, joined_at')
+          .select('role_id, joined_at, last_role_check')
           .eq('world_id', worldId)
           .eq('user_id', user.id)
           .single();
 
         if (inhabitantData) {
           setUserRole(inhabitantData.role_id);
-          setUserJoinedAt(inhabitantData.joined_at);
+          setUserLastRoleCheck(inhabitantData.last_role_check);
 
-          // Find new roles created after user joined
+          // Find new roles created after user's last role check (or joined_at if no last_role_check)
+          const checkTimestamp = inhabitantData.last_role_check || inhabitantData.joined_at;
           const newRolesForUser = (rolesData || []).filter(role => 
-            role.created_at && new Date(role.created_at) > new Date(inhabitantData.joined_at)
+            role.created_at && new Date(role.created_at) > new Date(checkTimestamp)
           );
           setNewRoles(newRolesForUser);
         } else {
           setUserRole(null);
-          setUserJoinedAt(null);
+          setUserLastRoleCheck(null);
           setNewRoles([]);
         }
       }
@@ -356,24 +353,44 @@ export function WorldView() {
     } catch (error) {
       console.error('Error joining role:', error);
     }
-  };
-
-  const switchRole = async (newRoleId: string) => {
+  };  const switchRole = async (newRoleId: string) => {
     if (!user || !worldId || !userRole) return;
 
     try {
       const { error } = await supabase
         .from('inhabitants')
-        .update({ role_id: newRoleId })
+        .update({ 
+          role_id: newRoleId,
+          last_role_check: new Date().toISOString()
+        })
         .eq('user_id', user.id)
         .eq('world_id', worldId);
 
       if (error) throw error;
       setUserRole(newRoleId);
-      // Remove the switched role from new roles list
-      setNewRoles(prev => prev.filter(role => role.id !== newRoleId));
+      setUserLastRoleCheck(new Date().toISOString());
+      // Clear all new roles since user has now seen and interacted with the role system
+      setNewRoles([]);
     } catch (error) {
       console.error('Error switching role:', error);
+    }
+  };
+
+  const markRolesAsSeen = async () => {
+    if (!user || !worldId || newRoles.length === 0) return;
+
+    try {
+      const { error } = await supabase
+        .from('inhabitants')
+        .update({ last_role_check: new Date().toISOString() })
+        .eq('user_id', user.id)
+        .eq('world_id', worldId);
+
+      if (error) throw error;
+      setUserLastRoleCheck(new Date().toISOString());
+      setNewRoles([]);
+    } catch (error) {
+      console.error('Error marking roles as seen:', error);
     }
   };
 
@@ -743,11 +760,18 @@ export function WorldView() {
               );
             })}
           </div>
-          
-          <div className="mt-4 pt-4 border-t border-gray-700">
-            <p className="text-gray-400 text-xs">
-              💡 Tip: Switching roles will update your permissions and how others see you in this world. You can only have one role at a time.
-            </p>
+            <div className="mt-4 pt-4 border-t border-gray-700">
+            <div className="flex justify-between items-center">
+              <p className="text-gray-400 text-xs">
+                💡 Tip: Switching roles will update your permissions and how others see you in this world. You can only have one role at a time.
+              </p>
+              <button
+                onClick={markRolesAsSeen}
+                className="px-3 py-1 text-gray-400 hover:text-white text-sm border border-gray-600 hover:border-gray-500 rounded transition-colors"
+              >
+                Dismiss All
+              </button>
+            </div>
           </div>
         </div>
       )}
