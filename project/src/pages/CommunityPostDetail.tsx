@@ -4,6 +4,7 @@ import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 import { CommentThread } from '../components/CommentThread';
 import { VotingSystem } from '../components/VotingSystem';
+import { UserLink } from '../components/UserLink';
 import { ArrowLeft, MessageCircle, Calendar, User } from 'lucide-react';
 
 interface CommunityPost {
@@ -12,7 +13,7 @@ interface CommunityPost {
   content: string;
   upvotes: number;
   created_at: string;
-  author: { username: string };
+  author: { id: string; username: string };
   world: { title: string; creator_id: string };
 }
 
@@ -21,7 +22,7 @@ interface CommunityComment {
   comment_text: string;
   created_at: string;
   parent_comment_id: string | null;
-  author: { username: string };
+  author: { id: string; username: string };
   replies?: CommunityComment[];
 }
 
@@ -39,29 +40,27 @@ export function CommunityPostDetail() {
     fetchPostData();
   }, [worldId, postId]);
 
-  const fetchPostData = async () => {
-    try {
+  const fetchPostData = async () => {    try {
       // Fetch the specific community post
       const { data: postData, error: postError } = await supabase
         .from('community_posts')
         .select(`
           *,
-          author:users!author_id(username),
+          author:users!author_id(id, username),
           world:worlds!world_id(title, creator_id)
         `)
         .eq('id', postId)
         .eq('world_id', worldId)
         .single();
 
-      if (postError) throw postError;
-      setPost(postData);
+      if (postError) throw postError;      setPost(postData);
 
       // Fetch all comments for this post
       const { data: commentsData, error: commentsError } = await supabase
         .from('community_comments')
         .select(`
           *,
-          author:users!author_id(username)
+          author:users!author_id(id, username)
         `)
         .eq('post_id', postId)
         .order('created_at', { ascending: true });
@@ -164,9 +163,8 @@ export function CommunityPostDetail() {
           <div className="flex items-center space-x-4">
             <div className="w-12 h-12 bg-indigo-600 rounded-full flex items-center justify-center">
               <User className="h-6 w-6 text-white" />
-            </div>
-            <div>
-              <h3 className="text-white font-semibold">{post.author.username}</h3>
+            </div>            <div>
+              <UserLink userId={post.author.id} username={post.author.username} className="text-white font-semibold" />
               <div className="flex items-center space-x-2 text-gray-400 text-sm">
                 <Calendar className="h-4 w-4" />
                 <span>{new Date(post.created_at).toLocaleDateString()}</span>

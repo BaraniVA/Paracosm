@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Share, Copy, X, Download, Globe } from 'lucide-react';
 import html2canvas from 'html2canvas';
+import { UserLink } from './UserLink';
 
 interface World {
   id: string;
@@ -8,7 +9,7 @@ interface World {
   description: string;
   laws: string[];
   creator_id: string;
-  creator: { username: string };
+  creator: { id: string; username: string };
 }
 
 interface WorldShareCardProps {
@@ -212,9 +213,8 @@ export function WorldShareCard({ world, isOpen, onClose }: WorldShareCardProps) 
                   </h5>
                   <h4 className="text-xl font-bold text-blue-900 mb-1 leading-tight">
                     {truncateText(world.title, 50)}
-                  </h4>
-                  <p className="text-blue-700 text-xs">
-                    Created by {world.creator.username}
+                  </h4>                  <p className="text-blue-700 text-xs">
+                    Created by <UserLink userId={world.creator.id} username={world.creator.username} className="text-blue-700" />
                   </p>
                 </div>
 

@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { Link, useParams } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 import { ProfilePictureUpload } from '../components/ProfilePictureUpload';
@@ -48,6 +48,7 @@ interface UserQuestion {
 
 export function Profile() {
   const { user } = useAuth();
+  const { userId } = useParams<{ userId: string }>();
   const [userWorlds, setUserWorlds] = useState<World[]>([]);
   const [joinedWorlds, setJoinedWorlds] = useState<Inhabitant[]>([]);
   const [userScrolls, setUserScrolls] = useState<UserScroll[]>([]);
@@ -58,49 +59,51 @@ export function Profile() {
     username: '',
     bio: '',
     bio_extended: '',
-    profile_picture_url: ''
-  });
+    profile_picture_url: '',
+    created_at: ''  });
   const [saving, setSaving] = useState(false);
 
+  // Determine which user's profile to show
+  const targetUserId = userId || user?.id;
+  const isOwnProfile = !userId || userId === user?.id;
   useEffect(() => {
-    if (user) {
+    if (targetUserId) {
       fetchUserData();
       fetchUserProfile();
     }
-  }, [user]);
-
+  }, [targetUserId]); // eslint-disable-line react-hooks/exhaustive-deps
   const fetchUserProfile = async () => {
-    if (!user) return;
+    if (!targetUserId) return;
 
     try {
       const { data, error } = await supabase
         .from('users')
-        .select('username, bio, bio_extended, profile_picture_url')
-        .eq('id', user.id)
+        .select('username, bio, bio_extended, profile_picture_url, created_at')
+        .eq('id', targetUserId)
         .single();
 
       if (error) throw error;
 
-      setProfileData({
+      const profileDataObj = {
         username: data.username || '',
         bio: data.bio || '',
         bio_extended: data.bio_extended || '',
-        profile_picture_url: data.profile_picture_url || ''
-      });
+        profile_picture_url: data.profile_picture_url || '',
+        created_at: data.created_at || ''
+      };      setProfileData(profileDataObj);
     } catch (error) {
       console.error('Error fetching user profile:', error);
     }
   };
-
   const fetchUserData = async () => {
-    if (!user) return;
+    if (!targetUserId) return;
 
     try {
       // Fetch user's created worlds
       const { data: worldsData, error: worldsError } = await supabase
         .from('worlds')
         .select('*')
-        .eq('creator_id', user.id)
+        .eq('creator_id', targetUserId)
         .order('created_at', { ascending: false });
 
       if (worldsError) throw worldsError;
@@ -137,22 +140,20 @@ export function Profile() {
         })
       );
 
-      setUserWorlds(worldsWithCounts);
-
-      // Fetch worlds user has joined
+      setUserWorlds(worldsWithCounts);      // Fetch worlds user has joined
       const { data: inhabitantsData, error: inhabitantsError } = await supabase
         .from('inhabitants')
         .select(`
           joined_at,
-          world:worlds!world_id(id, title),
-          role:roles!role_id(name)
+          world:worlds(id, title),
+          role:roles(name)
         `)
-        .eq('user_id', user.id)
+        .eq('user_id', targetUserId)
         .order('joined_at', { ascending: false });
 
       if (inhabitantsError) throw inhabitantsError;
-      setJoinedWorlds(inhabitantsData || []);
-
+      setJoinedWorlds((inhabitantsData || []) as unknown as Inhabitant[]);
+      
       // Fetch user's scrolls
       const { data: scrollsData, error: scrollsError } = await supabase
         .from('scrolls')
@@ -160,7 +161,7 @@ export function Profile() {
           *,
           world:worlds!world_id(title)
         `)
-        .eq('author_id', user.id)
+        .eq('author_id', targetUserId)
         .order('created_at', { ascending: false });
 
       if (scrollsError) throw scrollsError;
@@ -173,7 +174,7 @@ export function Profile() {
           *,
           world:worlds!world_id(title)
         `)
-        .eq('author_id', user.id)
+        .eq('author_id', targetUserId)
         .order('created_at', { ascending: false });
 
       if (questionsError) throw questionsError;
@@ -210,11 +211,10 @@ export function Profile() {
       setSaving(false);
     }
   };
-
   if (!user) {
     return (
       <div className="text-center py-12">
-        <p className="text-gray-400">Please log in to view your profile</p>
+        <p className="text-gray-400">Please log in to view profiles</p>
       </div>
     );
   }
@@ -234,10 +234,9 @@ export function Profile() {
     <div className="space-y-8">
       {/* Enhanced Profile Header */}
       <div className="bg-gray-800 rounded-lg p-6">
-        <div className="flex flex-col md:flex-row items-start md:items-center space-y-4 md:space-y-0 md:space-x-6">
-          {/* Profile Picture */}
+        <div className="flex flex-col md:flex-row items-start md:items-center space-y-4 md:space-y-0 md:space-x-6">          {/* Profile Picture */}
           <div className="flex-shrink-0">
-            {isEditing ? (
+            {isEditing && isOwnProfile ? (
               <ProfilePictureUpload
                 currentImageUrl={profileData.profile_picture_url}
                 onImageChange={(url) => setProfileData(prev => ({ ...prev, profile_picture_url: url }))}
@@ -252,16 +251,14 @@ export function Profile() {
                   />
                 ) : (
                   <span className="text-2xl font-bold text-white">
-                    {profileData.username?.[0]?.toUpperCase() || user.email?.[0]?.toUpperCase()}
+                    {profileData.username?.[0]?.toUpperCase() || 'U'}
                   </span>
                 )}
               </div>
             )}
-          </div>
-
-          {/* Profile Info */}
+          </div>          {/* Profile Info */}
           <div className="flex-1">
-            {isEditing ? (
+            {isEditing && isOwnProfile ? (
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-1">Username</label>
@@ -298,16 +295,19 @@ export function Profile() {
                 <h1 className="text-2xl font-bold text-white mb-2">
                   {profileData.username || 'User'}
                 </h1>
-                <p className="text-gray-400 mb-2">{user.email}</p>
+                {/* Only show email for own profile */}
+                {isOwnProfile && (
+                  <p className="text-gray-400 mb-2">{user.email}</p>
+                )}
                 {profileData.bio && (
                   <p className="text-gray-300 mb-2">{profileData.bio}</p>
                 )}
-                {profileData.bio_extended && (
+                {/* Only show extended bio for own profile */}
+                {isOwnProfile && profileData.bio_extended && (
                   <p className="text-gray-300 text-sm leading-relaxed mb-2">{profileData.bio_extended}</p>
-                )}
-                <p className="text-gray-400 text-sm">
+                )}                <p className="text-gray-400 text-sm">
                   <Calendar className="h-4 w-4 inline mr-1" />
-                  Joined {new Date(user.created_at).toLocaleDateString()}
+                  Joined {new Date(profileData.created_at || user.created_at).toLocaleDateString()}
                 </p>
               </div>
             )}
@@ -315,35 +315,38 @@ export function Profile() {
 
           {/* Edit Button */}
           <div className="flex-shrink-0">
-            {isEditing ? (
-              <div className="flex space-x-2">
-                <button
-                  onClick={handleSaveProfile}
-                  disabled={saving}
-                  className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors"
-                >
-                  <Save className="h-4 w-4 mr-2" />
-                  {saving ? 'Saving...' : 'Save'}
-                </button>
-                <button
-                  onClick={() => {
-                    setIsEditing(false);
-                    fetchUserProfile(); // Reset to original data
-                  }}
-                  className="flex items-center px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-500 transition-colors"
-                >
-                  <X className="h-4 w-4 mr-2" />
-                  Cancel
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={() => setIsEditing(true)}
-                className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
-              >
-                <Edit className="h-4 w-4 mr-2" />
-                Edit Profile
-              </button>
+            {isOwnProfile && (
+              <>
+                {isEditing ? (
+                  <div className="flex space-x-2">
+                    <button
+                      onClick={handleSaveProfile}
+                      disabled={saving}
+                      className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors"
+                    >
+                      <Save className="h-4 w-4 mr-2" />
+                      {saving ? 'Saving...' : 'Save'}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setIsEditing(false);
+                        fetchUserProfile(); // Reset to original data
+                      }}
+                      className="flex items-center px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-500 transition-colors"
+                    >
+                      <X className="h-4 w-4 mr-2" />
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setIsEditing(true)}
+                    className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+                  >
+                    <Edit className="h-4 w-4 mr-2" />
+                    Edit Profile
+                  </button>
+                )}              </>
             )}
           </div>
         </div>
@@ -373,12 +376,11 @@ export function Profile() {
         </div>
       </div>
 
-      <div className="grid md:grid-cols-2 gap-8">
-        {/* Your Worlds */}
+      <div className="grid md:grid-cols-2 gap-8">        {/* Worlds Created */}
         <div className="bg-gray-800 rounded-lg p-6">
           <h2 className="text-xl font-semibold text-white mb-4">
             <Globe className="h-5 w-5 inline mr-2" />
-            Your Worlds
+            {isOwnProfile ? 'Your Worlds' : 'Worlds Created'}
           </h2>
           <div className="space-y-3">
             {userWorlds.map((world) => (
@@ -397,26 +399,27 @@ export function Profile() {
                   <span>{new Date(world.created_at).toLocaleDateString()}</span>
                 </div>
               </Link>
-            ))}
-            {userWorlds.length === 0 && (
+            ))}            {userWorlds.length === 0 && (
               <div className="text-center py-8">
-                <p className="text-gray-400 mb-4">You haven't created any worlds yet</p>
-                <Link
-                  to="/create-world"
-                  className="inline-block px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
-                >
-                  Create Your First World
-                </Link>
+                <p className="text-gray-400 mb-4">
+                  {isOwnProfile ? "You haven't created any worlds yet" : "No worlds created yet"}
+                </p>
+                {isOwnProfile && (
+                  <Link
+                    to="/create-world"
+                    className="inline-block px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
+                  >
+                    Create Your First World
+                  </Link>
+                )}
               </div>
             )}
           </div>
-        </div>
-
-        {/* Worlds You Joined */}
+        </div>        {/* Worlds Joined */}
         <div className="bg-gray-800 rounded-lg p-6">
           <h2 className="text-xl font-semibold text-white mb-4">
             <Users className="h-5 w-5 inline mr-2" />
-            Worlds You Joined
+            {isOwnProfile ? 'Worlds You Joined' : 'Worlds Joined'}
           </h2>
           <div className="space-y-3">
             {joinedWorlds.map((inhabitant, index) => (
@@ -435,85 +438,84 @@ export function Profile() {
                   </span>
                 </div>
               </Link>
-            ))}
-            {joinedWorlds.length === 0 && (
+            ))}            {joinedWorlds.length === 0 && (
               <p className="text-gray-400 text-center py-8">
-                You haven't joined any worlds yet
+                {isOwnProfile ? "You haven't joined any worlds yet" : "No worlds joined yet"}
               </p>
             )}
           </div>
         </div>
-      </div>
-
-      <div className="grid md:grid-cols-2 gap-8">
-        {/* Your Scrolls */}
-        <div className="bg-gray-800 rounded-lg p-6">
-          <h2 className="text-xl font-semibold text-white mb-4">
-            <Scroll className="h-5 w-5 inline mr-2" />
-            Your Scrolls
-          </h2>
-          <div className="space-y-3">
-            {userScrolls.map((scroll) => (
-              <div key={scroll.id} className="p-3 rounded-md">
-                <div className="flex justify-between items-start mb-2">
-                  <span className="text-indigo-400 text-sm">{scroll.world.title}</span>
-                  {scroll.is_canon && (
-                    <span className="px-2 py-1 bg-green-600 text-white text-xs rounded-full">
-                      Canon
-                    </span>
-                  )}
-                </div>
-                <p className="text-gray-200 text-sm">{scroll.scroll_text}</p>
-                <p className="text-gray-400 text-xs mt-2">
-                  {new Date(scroll.created_at).toLocaleDateString()}
-                </p>
-              </div>
-            ))}
-            {userScrolls.length === 0 && (
-              <p className="text-gray-400 text-center py-8">
-                You haven't submitted any scrolls yet
-              </p>
-            )}
-          </div>
-        </div>
-
-        {/* Your Questions */}
-        <div className="bg-gray-800 rounded-lg p-6">
-          <h2 className="text-xl font-semibold text-white mb-4">
-            <MessageSquare className="h-5 w-5 inline mr-2" />
-            Your Questions
-          </h2>
-          <div className="space-y-3">
-            {userQuestions.map((question) => (
-              <div key={question.id} className="p-3 rounded-md">
-                <div className="flex justify-between items-start mb-2">
-                  <span className="text-indigo-400 text-sm">{question.world.title}</span>
-                  <div className="flex items-center space-x-2 text-xs text-gray-400">
-                    <span>{question.upvotes} upvotes</span>
-                    {question.answer && (
-                      <span className="text-green-400">Answered</span>
+      </div>      {/* Activity sections - only shown for own profile */}
+      {isOwnProfile && (
+        <div className="grid md:grid-cols-2 gap-8">
+          {/* Your Scrolls */}
+          <div className="bg-gray-800 rounded-lg p-6">
+            <h2 className="text-xl font-semibold text-white mb-4">
+              <Scroll className="h-5 w-5 inline mr-2" />
+              Your Scrolls
+            </h2>
+            <div className="space-y-3">
+              {userScrolls.map((scroll) => (
+                <div key={scroll.id} className="p-3 rounded-md">
+                  <div className="flex justify-between items-start mb-2">
+                    <span className="text-indigo-400 text-sm">{scroll.world.title}</span>
+                    {scroll.is_canon && (
+                      <span className="px-2 py-1 bg-green-600 text-white text-xs rounded-full">
+                        Canon
+                      </span>
                     )}
                   </div>
+                  <p className="text-gray-200 text-sm">{scroll.scroll_text}</p>
+                  <p className="text-gray-400 text-xs mt-2">
+                    {new Date(scroll.created_at).toLocaleDateString()}
+                  </p>
                 </div>
-                <p className="text-gray-200 text-sm">{question.question_text}</p>
-                {question.answer && (
-                  <div className="mt-2 p-2 rounded text-sm text-gray-300">
-                    {question.answer}
-                  </div>
-                )}
-                <p className="text-gray-400 text-xs mt-2">
-                  {new Date(question.created_at).toLocaleDateString()}
+              ))}
+              {userScrolls.length === 0 && (
+                <p className="text-gray-400 text-center py-8">
+                  You haven't submitted any scrolls yet
                 </p>
-              </div>
-            ))}
-            {userQuestions.length === 0 && (
-              <p className="text-gray-400 text-center py-8">
-                You haven't asked any questions yet
-              </p>
-            )}
+              )}
+            </div>
           </div>
-        </div>
-      </div>
+
+          {/* Your Questions */}
+          <div className="bg-gray-800 rounded-lg p-6">
+            <h2 className="text-xl font-semibold text-white mb-4">
+              <MessageSquare className="h-5 w-5 inline mr-2" />
+              Your Questions
+            </h2>
+            <div className="space-y-3">
+              {userQuestions.map((question) => (
+                <div key={question.id} className="p-3 rounded-md">
+                  <div className="flex justify-between items-start mb-2">
+                    <span className="text-indigo-400 text-sm">{question.world.title}</span>
+                    <div className="flex items-center space-x-2 text-xs text-gray-400">
+                      <span>{question.upvotes} upvotes</span>
+                      {question.answer && (
+                        <span className="text-green-400">Answered</span>
+                      )}
+                    </div>
+                  </div>
+                  <p className="text-gray-200 text-sm">{question.question_text}</p>
+                  {question.answer && (
+                    <div className="mt-2 p-2 rounded text-sm text-gray-300">
+                      {question.answer}
+                    </div>
+                  )}
+                  <p className="text-gray-400 text-xs mt-2">
+                    {new Date(question.created_at).toLocaleDateString()}
+                  </p>
+                </div>
+              ))}
+              {userQuestions.length === 0 && (
+                <p className="text-gray-400 text-center py-8">
+                  You haven't asked any questions yet
+                </p>
+              )}
+            </div>
+          </div>        </div>
+      )}
     </div>
   );
 }

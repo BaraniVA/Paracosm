@@ -3,13 +3,14 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 import { Globe, Users, Scroll, Search, Filter, Calendar, ArrowUp, Star, Compass, BookOpen } from 'lucide-react';
+import { UserLink } from '../components/UserLink';
 
 interface World {
   id: string;
   title: string;
   description: string;
-  created_at: string;
-  creator: {
+  created_at: string;  creator: {
+    id: string;
     username: string;
   };
   inhabitants_count: number;
@@ -44,7 +45,7 @@ export function ExploreWorlds() {
         .from('worlds')
         .select(`
           *,
-          creator:users!creator_id(username)
+          creator:users!creator_id(id, username)
         `)
         .order('created_at', { ascending: false });
 
@@ -235,10 +236,9 @@ export function ExploreWorlds() {
                 <div className="flex-1 min-w-0">
                   <h3 className="text-xl font-semibold text-white mb-2 group-hover:text-indigo-400 transition-colors line-clamp-2">
                     {world.title}
-                  </h3>
-                  <div className="flex items-center space-x-2 text-gray-400 text-sm mb-3">
+                  </h3>                  <div className="flex items-center space-x-2 text-gray-400 text-sm mb-3">
                     <Users className="h-4 w-4 flex-shrink-0" />
-                    <span className="truncate">By {world.creator.username}</span>
+                    <span className="truncate">By <UserLink userId={world.creator.id} username={world.creator.username} /></span>
                   </div>
                 </div>
                 

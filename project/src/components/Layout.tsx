@@ -143,8 +143,9 @@ export function Layout({ children }: LayoutProps) {
               <ul className="space-y-1 sm:space-y-2 text-xs sm:text-sm">
                 <li><Link to="/" className="text-gray-400 hover:text-white transition-colors">Home</Link></li>
                 <li><Link to="/explore" className="text-gray-400 hover:text-white transition-colors">Explore Worlds</Link></li>
+                <li><Link to="/help" className="text-gray-400 hover:text-white transition-colors">Help Center</Link></li>
+                <li><Link to="/quick-start" className="text-gray-400 hover:text-white transition-colors">Quick Start</Link></li>
                 <li><Link to="/signup" className="text-gray-400 hover:text-white transition-colors">Sign Up</Link></li>
-                <li><Link to="/login" className="text-gray-400 hover:text-white transition-colors">Login</Link></li>
                 {user && (
                   <li><Link to="/create-world" className="text-gray-400 hover:text-white transition-colors">Create World</Link></li>
                 )}
@@ -154,19 +155,18 @@ export function Layout({ children }: LayoutProps) {
             <div>
               <h3 className="text-white font-semibold mb-3 sm:mb-4 text-sm sm:text-base">Community</h3>
               <ul className="space-y-1 sm:space-y-2 text-xs sm:text-sm">
-                <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Discord</a></li>
-                <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Twitter</a></li>
-                <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Reddit</a></li>
+                <li><a href="https://discord.gg/VHDHGZfmrU" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white transition-colors">Discord</a></li>
+                <li><a href="https://www.reddit.com/r/ParacosmWorlds/" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white transition-colors">Reddit</a></li>
               </ul>
             </div>
             
             <div>
-              <h3 className="text-white font-semibold mb-3 sm:mb-4 text-sm sm:text-base">Support</h3>
+              <h3 className="text-white font-semibold mb-3 sm:mb-4 text-sm sm:text-base">Legal</h3>
               <ul className="space-y-1 sm:space-y-2 text-xs sm:text-sm">
-                <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Help Center</a></li>
-                <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Contact Us</a></li>
-                <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Privacy Policy</a></li>
-                <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Terms of Service</a></li>
+                <li><Link to="/privacy" className="text-gray-400 hover:text-white transition-colors">Privacy Policy</Link></li>
+                <li><Link to="/terms" className="text-gray-400 hover:text-white transition-colors">Terms of Service</Link></li>
+                <li><Link to="/contact" className="text-gray-400 hover:text-white transition-colors">Contact Us</Link></li>
+                <li><Link to="/help" className="text-gray-400 hover:text-white transition-colors">Help Center</Link></li>
               </ul>
             </div>
           </div>

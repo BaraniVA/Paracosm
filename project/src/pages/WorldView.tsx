@@ -10,6 +10,7 @@ import { TimelineView } from '../components/TimelineView';
 import { CreateEditTimelineEntryForm } from '../components/CreateEditTimelineEntryForm';
 import { VotingSystem } from '../components/VotingSystem';
 import { WorldShareCard } from '../components/WorldShareCard';
+import { UserLink } from '../components/UserLink';
 
 interface World {
   id: string;
@@ -17,7 +18,7 @@ interface World {
   description: string;
   laws: string[];
   creator_id: string;
-  creator: { username: string };
+  creator: { id: string; username: string };
 }
 
 interface Role {
@@ -33,7 +34,7 @@ interface Question {
   upvotes: number;
   answer: string | null;
   created_at: string;
-  author: { username: string };
+  author: { id: string; username: string };
 }
 
 interface ScrollItem {
@@ -41,7 +42,7 @@ interface ScrollItem {
   scroll_text: string;
   is_canon: boolean;
   created_at: string;
-  author: { username: string };
+  author: { id: string; username: string };
 }
 
 interface CommunityPost {
@@ -50,7 +51,7 @@ interface CommunityPost {
   content: string;
   upvotes: number;
   created_at: string;
-  author: { username: string };
+  author: { id: string; username: string };
   comments_count: number;
 }
 
@@ -117,13 +118,12 @@ export function WorldView() {
   }, [worldId, user]);
 
   const fetchWorldData = async () => {
-    try {
-      // Fetch world
+    try {      // Fetch world
       const { data: worldData, error: worldError } = await supabase
         .from('worlds')
         .select(`
           *,
-          creator:users!creator_id(username)
+          creator:users!creator_id(id, username)
         `)
         .eq('id', worldId)
         .single();
@@ -166,54 +166,60 @@ export function WorldView() {
 
         if (inhabitantData) {
           setUserRole(inhabitantData.role_id);
-          setUserLastRoleCheck(inhabitantData.last_role_check);
-
-          // Find new roles created after user's last role check (or joined_at if no last_role_check)
+          setUserLastRoleCheck(inhabitantData.last_role_check);          // Find new roles created after user's last role check (or joined_at if no last_role_check)
           const checkTimestamp = inhabitantData.last_role_check || inhabitantData.joined_at;
-          const newRolesForUser = (rolesData || []).filter(role => 
-            role.created_at && new Date(role.created_at) > new Date(checkTimestamp)
-          );
+          const newRolesForUser = (rolesData || []).filter(role => {
+            // Only show roles that have a created_at timestamp and were created after the check timestamp
+            if (!role.created_at || !checkTimestamp) return false;
+            
+            const roleCreatedAt = new Date(role.created_at);
+            const userCheckTime = new Date(checkTimestamp);
+            
+            // Add some buffer to avoid showing roles created around the same time as user joined
+            const bufferTime = new Date(userCheckTime.getTime() + 5000); // 5 second buffer
+            
+            return roleCreatedAt > bufferTime;
+          });
           setNewRoles(newRolesForUser);
+          
+          // Debug logging
+          console.log('User check timestamp:', checkTimestamp);
+          console.log('Available roles:', rolesData?.map(r => ({ name: r.name, created_at: r.created_at })));
+          console.log('New roles for user:', newRolesForUser.map(r => ({ name: r.name, created_at: r.created_at })));
         } else {
           setUserRole(null);
           setUserLastRoleCheck(null);
           setNewRoles([]);
         }
-      }
-
-      // Fetch questions
+      }      // Fetch questions
       const { data: questionsData, error: questionsError } = await supabase
         .from('questions')
         .select(`
           *,
-          author:users!author_id(username)
+          author:users!author_id(id, username)
         `)
         .eq('world_id', worldId)
         .order('created_at', { ascending: false });
 
       if (questionsError) throw questionsError;
-      setQuestions(questionsData || []);
-
-      // Fetch only canon scrolls for public view
+      setQuestions(questionsData || []);      // Fetch only canon scrolls for public view
       const { data: scrollsData, error: scrollsError } = await supabase
         .from('scrolls')
         .select(`
           *,
-          author:users!author_id(username)
+          author:users!author_id(id, username)
         `)
         .eq('world_id', worldId)
         .eq('is_canon', true)
         .order('created_at', { ascending: false });
 
       if (scrollsError) throw scrollsError;
-      setScrolls(scrollsData || []);
-
-      // Fetch community posts with comment counts
+      setScrolls(scrollsData || []);      // Fetch community posts with comment counts
       const { data: postsData, error: postsError } = await supabase
         .from('community_posts')
         .select(`
           *,
-          author:users!author_id(username)
+          author:users!author_id(id, username)
         `)
         .eq('world_id', worldId)
         .order('created_at', { ascending: false });
@@ -358,20 +364,23 @@ export function WorldView() {
     if (!user || !worldId || !userRole) return;
 
     try {
+      const now = new Date().toISOString();
       const { error } = await supabase
         .from('inhabitants')
         .update({ 
           role_id: newRoleId,
-          last_role_check: new Date().toISOString()
+          last_role_check: now
         })
         .eq('user_id', user.id)
         .eq('world_id', worldId);
 
       if (error) throw error;
       setUserRole(newRoleId);
-      setUserLastRoleCheck(new Date().toISOString());
+      setUserLastRoleCheck(now);
       // Clear all new roles since user has now seen and interacted with the role system
       setNewRoles([]);
+      
+      console.log('Role switched successfully, timestamp updated to:', now);
     } catch (error) {
       console.error('Error switching role:', error);
     }
@@ -381,15 +390,18 @@ export function WorldView() {
     if (!user || !worldId || newRoles.length === 0) return;
 
     try {
+      const now = new Date().toISOString();
       const { error } = await supabase
         .from('inhabitants')
-        .update({ last_role_check: new Date().toISOString() })
+        .update({ last_role_check: now })
         .eq('user_id', user.id)
         .eq('world_id', worldId);
 
       if (error) throw error;
-      setUserLastRoleCheck(new Date().toISOString());
+      setUserLastRoleCheck(now);
       setNewRoles([]);
+      
+      console.log('Roles marked as seen, timestamp updated to:', now);
     } catch (error) {
       console.error('Error marking roles as seen:', error);
     }
@@ -652,9 +664,8 @@ export function WorldView() {
         <div className="flex justify-between items-start mb-6">
           <div className="flex-1">
             <h1 className="text-3xl font-bold text-white mb-3">{world.title}</h1>
-            <p className="text-gray-300 text-lg leading-relaxed mb-4">{world.description}</p>
-            <p className="text-gray-400">
-              Created by <span className="text-indigo-400 font-medium">{world.creator.username}</span>
+            <p className="text-gray-300 text-lg leading-relaxed mb-4">{world.description}</p>            <p className="text-gray-400">
+              Created by <UserLink userId={world.creator.id} username={world.creator.username} />
             </p>
           </div>          <div className="flex space-x-3">
             <button 
@@ -854,9 +865,8 @@ export function WorldView() {
                     className="block p-3 hover:bg-gray-700 rounded-lg transition-colors"
                   >
                     <h4 className="text-white font-medium text-sm mb-1">{post.title}</h4>
-                    <p className="text-gray-300 text-xs mb-2 line-clamp-2">{truncateText(post.content, 80)}</p>
-                    <div className="flex justify-between items-center text-xs text-gray-400">
-                      <span>{post.author.username}</span>
+                    <p className="text-gray-300 text-xs mb-2 line-clamp-2">{truncateText(post.content, 80)}</p>                    <div className="flex justify-between items-center text-xs text-gray-400">
+                      <UserLink userId={post.author.id} username={post.author.username} className="text-xs" />
                       <div className="flex items-center space-x-2">
                         <span>{post.comments_count} replies</span>
                         <div className="flex items-center space-x-1">
@@ -881,9 +891,8 @@ export function WorldView() {
               <div className="space-y-3">
                 {questions.slice(0, 3).map((question) => (
                   <div key={question.id} className="p-3">
-                    <p className="text-gray-200 text-sm leading-relaxed mb-2">{question.question_text}</p>
-                    <div className="flex justify-between items-center text-xs text-gray-400">
-                      <span>{question.author.username}</span>
+                    <p className="text-gray-200 text-sm leading-relaxed mb-2">{question.question_text}</p>                    <div className="flex justify-between items-center text-xs text-gray-400">
+                      <UserLink userId={question.author.id} username={question.author.username} className="text-xs" />
                       <div className="flex items-center space-x-1">
                         <ArrowUp className="h-3 w-3" />
                         <span>{question.upvotes}</span>
@@ -907,9 +916,8 @@ export function WorldView() {
                   <div key={scroll.id} className="p-3 rounded-lg">
                     <p className="text-gray-200 text-sm leading-relaxed mb-2">
                       {truncateText(scroll.scroll_text, 100)}
-                    </p>
-                    <div className="flex justify-between items-center text-xs text-gray-400">
-                      <span>{scroll.author.username}</span>
+                    </p>                    <div className="flex justify-between items-center text-xs text-gray-400">
+                      <UserLink userId={scroll.author.id} username={scroll.author.username} className="text-xs" />
                       <span className="text-green-400 font-medium">Canon</span>
                     </div>
                   </div>
@@ -965,9 +973,8 @@ export function WorldView() {
                         <span className="text-white font-medium">
                           {post.author.username[0].toUpperCase()}
                         </span>
-                      </div>
-                      <div>
-                        <p className="text-white font-medium">{post.author.username}</p>
+                      </div>                      <div>
+                        <UserLink userId={post.author.id} username={post.author.username} />
                         <p className="text-gray-400 text-sm">
                           {new Date(post.created_at).toLocaleDateString()}
                         </p>
@@ -1058,9 +1065,8 @@ export function WorldView() {
                         <span className="text-white text-sm font-medium">
                           {question.author.username[0].toUpperCase()}
                         </span>
-                      </div>
-                      <div>
-                        <p className="text-white font-medium">{question.author.username}</p>
+                      </div>                      <div>
+                        <UserLink userId={question.author.id} username={question.author.username} />
                         <p className="text-gray-400 text-sm">
                           {new Date(question.created_at).toLocaleDateString()}
                         </p>
@@ -1130,9 +1136,8 @@ export function WorldView() {
                         <span className="text-white text-sm font-medium">
                           {scroll.author.username[0].toUpperCase()}
                         </span>
-                      </div>
-                      <div>
-                        <p className="text-white font-medium">{scroll.author.username}</p>
+                      </div>                      <div>
+                        <UserLink userId={scroll.author.id} username={scroll.author.username} />
                         <p className="text-gray-400 text-sm">
                           {new Date(scroll.created_at).toLocaleDateString()}
                         </p>
