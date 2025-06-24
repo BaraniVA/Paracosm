@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { ChevronDown, Search, ExternalLink } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
@@ -19,34 +19,17 @@ export function LinkReferenceSelector({ worldId, linkedToType, selectedId, onSel
   const [options, setOptions] = useState<LinkOption[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [selectedOption, setSelectedOption] = useState<LinkOption | null>(null);
+  const [loading, setLoading] = useState(false);  const [selectedOption, setSelectedOption] = useState<LinkOption | null>(null);
 
-  useEffect(() => {
-    if (linkedToType) {
-      fetchOptions();
-    } else {
-      setOptions([]);
-      setSelectedOption(null);
-    }
-  }, [linkedToType, worldId]);
-
-  useEffect(() => {
-    if (selectedId && options.length > 0) {
-      const option = options.find(opt => opt.id === selectedId);
-      setSelectedOption(option || null);
-    }
-  }, [selectedId, options]);
-
-  const fetchOptions = async () => {
+  const fetchOptions = useCallback(async () => {
     if (!linkedToType || !worldId) return;
 
     setLoading(true);
     try {
-      let data: any[] = [];
+      let data: LinkOption[] = [];
 
       switch (linkedToType) {
-        case 'law':
+        case 'law': {
           const { data: worldData } = await supabase
             .from('worlds')
             .select('laws')
@@ -61,8 +44,9 @@ export function LinkReferenceSelector({ worldId, linkedToType, selectedId, onSel
             }));
           }
           break;
+        }
 
-        case 'role':
+        case 'role': {
           const { data: rolesData } = await supabase
             .from('roles')
             .select('id, name, description')
@@ -74,8 +58,9 @@ export function LinkReferenceSelector({ worldId, linkedToType, selectedId, onSel
             description: role.description
           }));
           break;
+        }
 
-        case 'timeline':
+        case 'timeline': {
           const { data: timelineData } = await supabase
             .from('timeline_entries')
             .select('id, era_title, year, description')
@@ -88,6 +73,7 @@ export function LinkReferenceSelector({ worldId, linkedToType, selectedId, onSel
             description: entry.description
           }));
           break;
+        }
       }
 
       setOptions(data);
@@ -96,7 +82,22 @@ export function LinkReferenceSelector({ worldId, linkedToType, selectedId, onSel
     } finally {
       setLoading(false);
     }
-  };
+  }, [linkedToType, worldId]);
+
+  useEffect(() => {
+    if (linkedToType) {
+      fetchOptions();
+    } else {
+      setOptions([]);
+      setSelectedOption(null);
+    }  }, [linkedToType, worldId, fetchOptions]);
+
+  useEffect(() => {
+    if (selectedId && options.length > 0) {
+      const option = options.find(opt => opt.id === selectedId);
+      setSelectedOption(option || null);
+    }
+  }, [selectedId, options]);
 
   const filteredOptions = options.filter(option =>
     option.name.toLowerCase().includes(searchTerm.toLowerCase()) ||

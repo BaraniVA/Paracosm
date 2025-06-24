@@ -3,13 +3,14 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 import { Globe, Users, Scroll, GitBranch, ArrowRight, CheckCircle, Star, BookOpen, MessageSquare, Zap, Shield, Heart, Award, User, Compass, AlertTriangle } from 'lucide-react';
+import { UserLink } from '../components/UserLink';
 
 interface World {
   id: string;
   title: string;
   description: string;
-  created_at: string;
-  creator: {
+  created_at: string;  creator: {
+    id: string;
     username: string;
   };
   inhabitants_count: number;
@@ -52,7 +53,7 @@ export function Landing() {
         .from('worlds')
         .select(`
           *,
-          creator:users!creator_id(username)
+          creator:users!creator_id(id, username)
         `)
         .order('created_at', { ascending: false })
         .limit(6);
@@ -408,10 +409,9 @@ export function Landing() {
                   </div>
                 </div>
                 
-                <div className="flex items-center justify-between text-sm">
-                  <div className="flex items-center space-x-1 text-gray-400">
+                <div className="flex items-center justify-between text-sm">                  <div className="flex items-center space-x-1 text-gray-400">
                     <Users className="h-4 w-4" />
-                    <span>By {world.creator?.username}</span>
+                    <span>By {world.creator ? <UserLink userId={world.creator.id} username={world.creator.username} /> : 'Unknown'}</span>
                   </div>
                   
                   <div className="flex items-center space-x-4 text-gray-400">

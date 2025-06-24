@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Users, Crown, UserX, AlertTriangle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { UserLink } from './UserLink';
 
 interface Inhabitant {
   id: string;
@@ -129,9 +130,8 @@ export function InhabitantManagement({ worldId, isCreator, onInhabitantKicked }:
                   </span>
                 </div>
                 
-                <div>
-                  <div className="flex items-center space-x-2">
-                    <span className="text-white font-medium">{inhabitant.user.username}</span>
+                <div>                  <div className="flex items-center space-x-2">
+                    <UserLink userId={inhabitant.user.id} username={inhabitant.user.username} className="text-white font-medium" />
                     {inhabitant.role.is_important && (
                       <Crown className="h-4 w-4 text-yellow-400" />
                     )}

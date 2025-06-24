@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { MessageCircle, CornerDownRight, Trash2, MoreHorizontal } from 'lucide-react';
+import { UserLink } from './UserLink';
 
 interface CommunityComment {
   id: string;
   comment_text: string;
   created_at: string;
   parent_comment_id: string | null;
-  author: { username: string };
+  author: { id: string; username: string };
   replies?: CommunityComment[];
 }
 
@@ -76,7 +77,7 @@ export function CommentItem({
   };
 
   const canReply = user && depth < maxDepth;
-  const canDelete = user && (user.id === comment.author.username || user.id === worldCreatorId);
+  const canDelete = user && (user.id === comment.author.id || user.id === worldCreatorId);
   const indentLevel = Math.min(depth, 3); // Limit visual indentation
   const marginLeft = indentLevel * 24; // 24px per level
 
@@ -100,10 +101,11 @@ export function CommentItem({
           
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center space-x-2">
-                <span className="text-white font-medium text-sm">
-                  {comment.author.username}
-                </span>
+              <div className="flex items-center space-x-2">                <UserLink 
+                  userId={comment.author.id} 
+                  username={comment.author.username} 
+                  className="text-white font-medium text-sm"
+                />
                 <span className="text-gray-400 text-xs">
                   {new Date(comment.created_at).toLocaleDateString()}
                 </span>

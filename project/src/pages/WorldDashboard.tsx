@@ -2,11 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
-import { Users, MessageSquare, Scroll, GitBranch, Settings, Check, X, Trash2, ArrowUp, Edit, Save, Plus, BookOpen } from 'lucide-react';
+import { Users, MessageSquare, Scroll, GitBranch, Settings, Check, X, Trash2, ArrowUp, Edit, Save, Plus, BookOpen, UserX } from 'lucide-react';
 import { CreateEditWorldRecordForm } from '../components/CreateEditWorldRecordForm';
 import { TimelineView } from '../components/TimelineView';
 import { CreateEditTimelineEntryForm } from '../components/CreateEditTimelineEntryForm';
-import { InhabitantManagement } from '../components/InhabitantManagement';
+import { UserLink } from '../components/UserLink';
 
 interface World {
   id: string;
@@ -31,7 +31,7 @@ interface Question {
   upvotes: number;
   answer: string | null;
   created_at: string;
-  author: { username: string };
+  author: { id: string; username: string };
 }
 
 interface ScrollItem {
@@ -39,14 +39,22 @@ interface ScrollItem {
   scroll_text: string;
   is_canon: boolean;
   created_at: string;
-  author: { username: string };
+  author: { id: string; username: string };
 }
 
 interface Inhabitant {
   id: string;
   joined_at: string;
-  user: { username: string };
-  role: { name: string };
+  user: { 
+    id: string; 
+    username: string; 
+    email: string; 
+  };
+  role: { 
+    id: string;
+    name: string; 
+    is_important: boolean;
+  };
 }
 
 interface WorldRecord {
@@ -158,41 +166,35 @@ export function WorldDashboard() {
         id: role.id,
         name: role.name,
         description: role.description
-      })));
-
-      // Fetch questions
+      })));      // Fetch questions
       const { data: questionsData, error: questionsError } = await supabase
         .from('questions')
         .select(`
           *,
-          author:users!author_id(username)
+          author:users!author_id(id, username)
         `)
         .eq('world_id', worldId)
         .order('created_at', { ascending: false });
 
       if (questionsError) throw questionsError;
-      setQuestions(questionsData || []);
-
-      // Fetch ALL scrolls (both pending and canon) for the dashboard
+      setQuestions(questionsData || []);      // Fetch ALL scrolls (both pending and canon) for the dashboard
       const { data: scrollsData, error: scrollsError } = await supabase
         .from('scrolls')
         .select(`
           *,
-          author:users!author_id(username)
+          author:users!author_id(id, username)
         `)
         .eq('world_id', worldId)
         .order('created_at', { ascending: false });
 
       if (scrollsError) throw scrollsError;
-      setAllScrolls(scrollsData || []);
-
-      // Fetch inhabitants
+      setAllScrolls(scrollsData || []);      // Fetch inhabitants
       const { data: inhabitantsData, error: inhabitantsError } = await supabase
         .from('inhabitants')
         .select(`
           *,
-          user:users!user_id(username),
-          role:roles!role_id(name)
+          user:users!user_id(id, username, email),
+          role:roles!role_id(id, name, is_important)
         `)
         .eq('world_id', worldId)
         .order('joined_at', { ascending: false });
@@ -228,6 +230,23 @@ export function WorldDashboard() {
   };
 
   // World Records functions
+  const kickInhabitant = async (inhabitantId: string) => {
+    try {
+      const { error } = await supabase
+        .from('inhabitants')
+        .delete()
+        .eq('id', inhabitantId);
+
+      if (error) throw error;
+      
+      // Refresh the data
+      fetchWorldData();
+    } catch (error) {
+      console.error('Error kicking inhabitant:', error);
+      alert('Failed to remove inhabitant. Please try again.');
+    }
+  };
+
   const createWorldRecord = async (data: any) => {
     if (!user) return;
 
@@ -1095,14 +1114,13 @@ export function WorldDashboard() {
                 {pendingScrolls.map((scroll) => (
                   <div key={scroll.id} className="bg-gray-800 rounded-lg p-4 border-l-4 border-orange-500">
                     <div className="flex items-start justify-between mb-3">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-8 h-8 bg-orange-600 rounded-full flex items-center justify-center">
+                      <div className="flex items-center space-x-3">                        <div className="w-8 h-8 bg-orange-600 rounded-full flex items-center justify-center">
                           <span className="text-white text-sm font-medium">
                             {scroll.author.username[0].toUpperCase()}
                           </span>
                         </div>
                         <div>
-                          <p className="text-white font-medium">{scroll.author.username}</p>
+                          <UserLink userId={scroll.author.id} username={scroll.author.username} />
                           <p className="text-gray-400 text-sm">
                             {new Date(scroll.created_at).toLocaleDateString()}
                           </p>
@@ -1145,14 +1163,13 @@ export function WorldDashboard() {
                 {canonScrolls.map((scroll) => (
                   <div key={scroll.id} className="bg-gray-800 rounded-lg p-4 border-l-4 border-green-500">
                     <div className="flex items-start justify-between mb-3">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-8 h-8 bg-green-600 rounded-full flex items-center justify-center">
+                      <div className="flex items-center space-x-3">                        <div className="w-8 h-8 bg-green-600 rounded-full flex items-center justify-center">
                           <span className="text-white text-sm font-medium">
                             {scroll.author.username[0].toUpperCase()}
                           </span>
                         </div>
                         <div>
-                          <p className="text-white font-medium">{scroll.author.username}</p>
+                          <UserLink userId={scroll.author.id} username={scroll.author.username} />
                           <p className="text-gray-400 text-sm">
                             {new Date(scroll.created_at).toLocaleDateString()}
                           </p>
@@ -1198,14 +1215,13 @@ export function WorldDashboard() {
                 {unansweredQuestions.map((question) => (
                   <div key={question.id} className="bg-gray-800 rounded-lg p-4 border-l-4 border-blue-500">
                     <div className="flex items-start justify-between mb-3">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
+                      <div className="flex items-center space-x-3">                        <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
                           <span className="text-white text-sm font-medium">
                             {question.author.username[0].toUpperCase()}
                           </span>
                         </div>
                         <div>
-                          <p className="text-white font-medium">{question.author.username}</p>
+                          <UserLink userId={question.author.id} username={question.author.username} />
                           <p className="text-gray-400 text-sm">
                             {new Date(question.created_at).toLocaleDateString()}
                           </p>
@@ -1247,14 +1263,92 @@ export function WorldDashboard() {
               </div>
             )}
           </div>
-        )}
-
-        {activeTab === 'inhabitants' && (
-          <InhabitantManagement 
-            worldId={worldId!}
-            isCreator={true}
-            onInhabitantKicked={fetchWorldData}
-          />
+        )}        {activeTab === 'inhabitants' && (
+          <div className="space-y-6">
+            <div className="flex justify-between items-center">
+              <h3 className="text-lg font-medium text-white">World Inhabitants</h3>
+              <span className="text-gray-400 text-sm">{inhabitants.length} members</span>
+            </div>
+            
+            <div className="bg-gray-800 rounded-lg overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-700">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                        User
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                        Role
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                        Joined
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-600">
+                    {inhabitants.length > 0 ? (
+                      inhabitants.map((inhabitant) => (
+                        <tr key={inhabitant.id} className="hover:bg-gray-700 transition-colors">
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex items-center">
+                              <div className="w-8 h-8 bg-indigo-600 rounded-full flex items-center justify-center mr-3">
+                                <span className="text-white text-sm font-medium">
+                                  {inhabitant.user.username[0].toUpperCase()}
+                                </span>
+                              </div>
+                              <div>
+                                <UserLink 
+                                  userId={inhabitant.user.id} 
+                                  username={inhabitant.user.username}
+                                  className="text-white font-medium"
+                                />
+                              </div> 
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                              inhabitant.role.is_important 
+                                ? 'bg-purple-600 text-purple-100' 
+                                : 'bg-gray-600 text-gray-200'
+                            }`}>
+                              {inhabitant.role.name}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-gray-400 text-sm">
+                            {new Date(inhabitant.joined_at).toLocaleDateString()}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            {user?.id !== inhabitant.user.id && (                              <button
+                                onClick={() => {
+                                  if (window.confirm(`Are you sure you want to remove ${inhabitant.user.username} from this world?`)) {
+                                    kickInhabitant(inhabitant.id);
+                                  }
+                                }}
+                                className="text-red-400 hover:text-red-300 transition-colors"
+                                title="Remove from world"
+                              >
+                                <UserX className="h-4 w-4" />
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={4} className="px-6 py-12 text-center text-gray-400">
+                          No inhabitants yet
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
         )}
       </div>
 
