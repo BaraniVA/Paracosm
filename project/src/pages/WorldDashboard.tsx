@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 import { Users, MessageSquare, Scroll, GitBranch, Settings, Check, X, Trash2, ArrowUp, Edit, Save, Plus, BookOpen, UserX } from 'lucide-react';
@@ -14,6 +14,14 @@ interface World {
   description: string;
   laws: string[];
   creator_id: string;
+  parent_world?: {
+    id: string;
+    title: string;
+    creator: {
+      id: string;
+      username: string;
+    };
+  };
 }
 
 interface Role {
@@ -136,6 +144,22 @@ export function WorldDashboard() {
         throw worldError;
       }
 
+      // Fetch parent world info if this is a fork
+      let parent_world = null;
+      if (worldData.origin_world_id) {
+        const { data: parentWorldData } = await supabase
+          .from('worlds')
+          .select(`
+            id,
+            title,
+            creator:users!creator_id(id, username)
+          `)
+          .eq('id', worldData.origin_world_id)
+          .single();
+        
+        parent_world = parentWorldData;
+      }
+
       console.log('World data:', worldData);
       console.log('Creator ID:', worldData.creator_id);
       console.log('Current user ID:', user.id);
@@ -148,7 +172,7 @@ export function WorldDashboard() {
         return;
       }
 
-      setWorld(worldData);
+      setWorld({ ...worldData, parent_world });
       setEditedLaws([...worldData.laws]);
       setEditedTitle(worldData.title);
       setEditedDescription(worldData.description);
@@ -658,42 +682,59 @@ export function WorldDashboard() {
   const pendingScrolls = allScrolls.filter(s => !s.is_canon);
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">      {/* Header */}
-      <div className="flex items-center justify-between">
+    <div className="max-w-6xl mx-auto space-y-6 px-4">      {/* Header */}
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div className="flex-1 min-w-0">
+          {/* Parent World Reference */}
+          {world.parent_world && (
+            <div className="mb-3 p-2 bg-gray-800/50 rounded-lg border-l-4 border-indigo-500">
+              <p className="text-sm text-gray-400 mb-1">Forked from:</p>
+              <Link
+                to={`/world/${world.parent_world.id}`}
+                className="text-indigo-400 hover:text-indigo-300 font-medium text-sm transition-colors"
+              >
+                {world.parent_world.title}
+              </Link>
+              <span className="text-gray-500 text-sm ml-2">
+                by <UserLink userId={world.parent_world.creator.id} username={world.parent_world.creator.username} />
+              </span>
+            </div>
+          )}
           {/* Editable Title */}
           {editingTitle ? (
-            <div className="flex items-center space-x-3 mb-2">
+            <div className="space-y-2 mb-2">
               <input
                 type="text"
                 value={editedTitle}
                 onChange={(e) => setEditedTitle(e.target.value)}
-                className="text-2xl font-bold bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                className="w-full text-xl sm:text-2xl font-bold bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                 onKeyPress={(e) => {
                   if (e.key === 'Enter') updateWorldTitle();
                   if (e.key === 'Escape') cancelEditTitle();
                 }}
                 autoFocus
               />
-              <button
-                onClick={updateWorldTitle}
-                className="p-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-              >
-                <Save className="h-4 w-4" />
-              </button>
-              <button
-                onClick={cancelEditTitle}
-                className="p-2 bg-gray-600 text-white rounded-lg hover:bg-gray-500 transition-colors"
-              >
-                <X className="h-4 w-4" />
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={updateWorldTitle}
+                  className="p-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                >
+                  <Save className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={cancelEditTitle}
+                  className="p-2 bg-gray-600 text-white rounded-lg hover:bg-gray-500 transition-colors"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
             </div>
           ) : (
-            <div className="flex items-center space-x-3 mb-2">
-              <h1 className="text-2xl font-bold text-white">{world.title}</h1>
+            <div className="flex items-center gap-3 mb-2">
+              <h1 className="text-xl sm:text-2xl font-bold text-white flex-1 break-words">{world.title}</h1>
               <button
                 onClick={() => setEditingTitle(true)}
-                className="p-1 text-gray-400 hover:text-white transition-colors"
+                className="p-1 text-gray-400 hover:text-white transition-colors flex-shrink-0"
               >
                 <Edit className="h-4 w-4" />              </button>
             </div>
@@ -701,18 +742,18 @@ export function WorldDashboard() {
 
           {/* Editable Description */}
           {editingDescription ? (
-            <div className="space-y-2 mb-2 w-full max-w-4xl">
+            <div className="space-y-2 mb-2 w-full">
               <textarea
                 value={editedDescription}
                 onChange={(e) => setEditedDescription(e.target.value)}
                 rows={4}
-                className="w-full min-w-0 bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none"
+                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none"
                 onKeyPress={(e) => {
                   if (e.key === 'Escape') cancelEditDescription();
                 }}
                 autoFocus
               />
-              <div className="flex space-x-2">
+              <div className="flex gap-2">
                 <button
                   onClick={updateWorldDescription}
                   className="flex items-center px-3 py-1 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm"
@@ -730,11 +771,11 @@ export function WorldDashboard() {
               </div>
             </div>
           ) : (
-            <div className="flex items-start space-x-3 mb-2">
-              <p className="text-gray-400 text-sm flex-1">{world.description}</p>
+            <div className="flex items-start gap-3 mb-2">
+              <p className="text-gray-400 text-sm flex-1 break-words">{world.description}</p>
               <button
                 onClick={() => setEditingDescription(true)}
-                className="p-1 text-gray-400 hover:text-white transition-colors"
+                className="p-1 text-gray-400 hover:text-white transition-colors flex-shrink-0"
               >
                 <Edit className="h-4 w-4" />
               </button>
@@ -745,17 +786,17 @@ export function WorldDashboard() {
         </div>
         <button
           onClick={() => navigate(`/world/${worldId}`)}
-          className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium"
+          className="w-full lg:w-auto px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium"
         >
           View Public World
         </button>
       </div>
 
       {/* World Laws Management */}
-      <div className=" rounded-lg p-6">
-        <div className="flex justify-between items-center mb-4">
+      <div className="bg-gray-800 rounded-lg p-4 sm:p-6">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-4">
           <h3 className="text-lg font-semibold text-white">World Laws</h3>
-          <div className="flex space-x-2">
+          <div className="flex flex-wrap gap-2">
             {editingLaws ? (
               <>
                 <button
@@ -795,8 +836,8 @@ export function WorldDashboard() {
         {editingLaws ? (
           <div className="space-y-3">
             {editedLaws.map((law, index) => (
-              <div key={index} className="flex items-center space-x-3">
-                <span className="text-indigo-400 font-mono text-sm font-bold w-8">{index + 1}.</span>
+              <div key={index} className="flex items-start gap-3">
+                <span className="text-indigo-400 font-mono text-sm font-bold w-8 flex-shrink-0 mt-2">{index + 1}.</span>
                 <input
                   type="text"
                   value={law}
@@ -807,7 +848,7 @@ export function WorldDashboard() {
                 {editedLaws.length > 1 && (
                   <button
                     onClick={() => removeLaw(index)}
-                    className="p-2 text-red-400 hover:text-red-300 transition-colors"
+                    className="p-2 text-red-400 hover:text-red-300 transition-colors flex-shrink-0"
                   >
                     <Trash2 className="h-4 w-4" />
                   </button>
@@ -816,11 +857,11 @@ export function WorldDashboard() {
             ))}
           </div>
         ) : (
-          <div className="grid md:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
             {world.laws.map((law, index) => (
               <div key={index} className="flex items-start space-x-3 p-4 bg-gray-700 rounded-lg">
-                <span className="text-indigo-400 font-mono text-sm font-bold mt-0.5">{index + 1}.</span>
-                <p className="text-gray-200 text-sm leading-relaxed">{law}</p>
+                <span className="text-indigo-400 font-mono text-sm font-bold mt-0.5 flex-shrink-0">{index + 1}.</span>
+                <p className="text-gray-200 text-sm leading-relaxed break-words min-w-0">{law}</p>
               </div>
             ))}
           </div>
@@ -828,10 +869,10 @@ export function WorldDashboard() {
       </div>
 
       {/* World Roles Management */}
-      <div className="rounded-lg p-6">
-        <div className="flex justify-between items-center mb-4">
+      <div className="bg-gray-800 rounded-lg p-4 sm:p-6">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-4">
           <h3 className="text-lg font-semibold text-white">World Roles</h3>
-          <div className="flex space-x-2">
+          <div className="flex flex-wrap gap-2">
             {editingRoles ? (
               <>
                 <button
@@ -928,11 +969,11 @@ export function WorldDashboard() {
         ) : (
           <div>
             {roles.length > 0 ? (
-              <div className="grid md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 {roles.map((role) => (
                   <div key={role.id} className="p-4 bg-gray-700 rounded-lg">
-                    <h4 className="font-medium text-white mb-2">{role.name}</h4>
-                    <p className="text-gray-300 text-sm leading-relaxed">
+                    <h4 className="font-medium text-white mb-2 break-words">{role.name}</h4>
+                    <p className="text-gray-300 text-sm leading-relaxed break-words">
                       {role.description || 'No description provided'}
                     </p>
                   </div>
@@ -956,8 +997,8 @@ export function WorldDashboard() {
       </div>
 
       {/* World Records Management */}
-      <div className="bg-gray-800 rounded-lg p-6">
-        <div className="flex justify-between items-center mb-6">
+      <div className="bg-gray-800 rounded-lg p-4 sm:p-6">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
           <h3 className="text-lg font-semibold text-white flex items-center">
             <BookOpen className="h-5 w-5 mr-2" />
             Manage World Records
@@ -975,21 +1016,21 @@ export function WorldDashboard() {
           <div className="space-y-3">
             {worldRecords.map((record) => (
               <div key={record.id} className="bg-gray-700 rounded-lg p-4">
-                <div className="flex justify-between items-start mb-3">
-                  <div className="flex-1">
-                    <div className="flex items-center space-x-3 mb-2">
-                      <h4 className="font-medium text-white">{record.title}</h4>
-                      <span className="bg-gray-600 px-2 py-1 rounded text-xs text-gray-300">
+                <div className="flex flex-col lg:flex-row lg:justify-between lg:items-start gap-4 mb-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mb-2">
+                      <h4 className="font-medium text-white break-words">{record.title}</h4>
+                      <span className="bg-gray-600 px-2 py-1 rounded text-xs text-gray-300 self-start">
                         {record.category}
                       </span>
                     </div>
-                    <p className="text-gray-300 text-sm leading-relaxed line-clamp-2">
+                    <p className="text-gray-300 text-sm leading-relaxed line-clamp-2 break-words">
                       {record.description.length > 150 
                         ? record.description.slice(0, 150) + '...' 
                         : record.description}
                     </p>
                   </div>
-                  <div className="flex space-x-2 ml-4">
+                  <div className="flex gap-2 self-start lg:ml-4">
                     <button
                       onClick={() => {
                         setEditingRecord(record);
@@ -1023,7 +1064,7 @@ export function WorldDashboard() {
       </div>
 
       {/* Timeline Management */}
-      <div className="bg-gray-800 rounded-lg p-6">
+      <div className="bg-gray-800 rounded-lg p-3 sm:p-6">
         <TimelineView
           entries={timelineEntries}
           isCreator={true}
@@ -1039,36 +1080,36 @@ export function WorldDashboard() {
       </div>
 
       {/* Stats Bar */}
-      <div className="grid grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
         <div className="bg-gray-800 rounded-lg p-4 text-center">
-          <div className="text-2xl font-bold text-white">{inhabitants.length}</div>
-          <div className="text-gray-400 text-sm">Inhabitants</div>
+          <div className="text-xl sm:text-2xl font-bold text-white">{inhabitants.length}</div>
+          <div className="text-gray-400 text-xs sm:text-sm">Inhabitants</div>
         </div>
         <div className="bg-gray-800 rounded-lg p-4 text-center">
-          <div className="text-2xl font-bold text-orange-400">{pendingScrolls.length}</div>
-          <div className="text-gray-400 text-sm">Pending Scrolls</div>
+          <div className="text-xl sm:text-2xl font-bold text-orange-400">{pendingScrolls.length}</div>
+          <div className="text-gray-400 text-xs sm:text-sm">Pending Scrolls</div>
         </div>
         <div className="bg-gray-800 rounded-lg p-4 text-center">
-          <div className="text-2xl font-bold text-green-400">{canonScrolls.length}</div>
-          <div className="text-gray-400 text-sm">Canon Lore</div>
+          <div className="text-xl sm:text-2xl font-bold text-green-400">{canonScrolls.length}</div>
+          <div className="text-gray-400 text-xs sm:text-sm">Canon Lore</div>
         </div>
         <div className="bg-gray-800 rounded-lg p-4 text-center">
-          <div className="text-2xl font-bold text-blue-400">{unansweredQuestions.length}</div>
-          <div className="text-gray-400 text-sm">Unanswered</div>
+          <div className="text-xl sm:text-2xl font-bold text-blue-400">{unansweredQuestions.length}</div>
+          <div className="text-gray-400 text-xs sm:text-sm">Unanswered</div>
         </div>
         <div className="bg-gray-800 rounded-lg p-4 text-center">
-          <div className="text-2xl font-bold text-purple-400">{worldRecords.length}</div>
-          <div className="text-gray-400 text-sm">Records</div>
+          <div className="text-xl sm:text-2xl font-bold text-purple-400">{worldRecords.length}</div>
+          <div className="text-gray-400 text-xs sm:text-sm">Records</div>
         </div>
         <div className="bg-gray-800 rounded-lg p-4 text-center">
-          <div className="text-2xl font-bold text-indigo-400">{timelineEntries.length}</div>
-          <div className="text-gray-400 text-sm">Timeline</div>
+          <div className="text-xl sm:text-2xl font-bold text-indigo-400">{timelineEntries.length}</div>
+          <div className="text-gray-400 text-xs sm:text-sm">Timeline</div>
         </div>
       </div>
 
       {/* Navigation Tabs */}
-      <div className="border-b border-gray-700">
-        <nav className="flex space-x-8">
+      <div className="border-b border-gray-700 overflow-x-auto">
+        <nav className="flex space-x-4 sm:space-x-8 min-w-max px-0">
           {[
             { id: 'pending', label: 'Pending Review', count: pendingScrolls.length, color: 'orange' },
             { id: 'canon', label: 'Canon Lore', count: canonScrolls.length, color: 'green' },
@@ -1078,7 +1119,7 @@ export function WorldDashboard() {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center px-1 py-3 font-medium text-sm border-b-2 transition-colors ${
+              className={`flex items-center px-1 py-3 font-medium text-sm border-b-2 transition-colors whitespace-nowrap ${
                 activeTab === tab.id
                   ? 'border-indigo-500 text-indigo-400'
                   : 'border-transparent text-gray-400 hover:text-gray-300'
@@ -1113,37 +1154,37 @@ export function WorldDashboard() {
               <div className="space-y-3">
                 {pendingScrolls.map((scroll) => (
                   <div key={scroll.id} className="bg-gray-800 rounded-lg p-4 border-l-4 border-orange-500">
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex items-center space-x-3">                        <div className="w-8 h-8 bg-orange-600 rounded-full flex items-center justify-center">
+                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-3">
+                      <div className="flex items-center space-x-3 min-w-0 flex-1">                        <div className="w-8 h-8 bg-orange-600 rounded-full flex items-center justify-center flex-shrink-0">
                           <span className="text-white text-sm font-medium">
                             {scroll.author.username[0].toUpperCase()}
                           </span>
                         </div>
-                        <div>
+                        <div className="min-w-0">
                           <UserLink userId={scroll.author.id} username={scroll.author.username} />
                           <p className="text-gray-400 text-sm">
                             {new Date(scroll.created_at).toLocaleDateString()}
                           </p>
                         </div>
                       </div>
-                      <div className="flex space-x-2">
+                      <div className="flex flex-col sm:flex-row gap-2 self-start">
                         <button
                           onClick={() => approveScroll(scroll.id)}
-                          className="flex items-center px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium"
+                          className="flex items-center justify-center px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium"
                         >
                           <Check className="h-4 w-4 mr-1" />
                           Approve
                         </button>
                         <button
                           onClick={() => rejectScroll(scroll.id)}
-                          className="flex items-center px-3 py-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium"
+                          className="flex items-center justify-center px-3 py-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium"
                         >
                           <X className="h-4 w-4 mr-1" />
                           Reject
                         </button>
                       </div>
                     </div>
-                    <p className="text-gray-200 leading-relaxed">{scroll.scroll_text}</p>
+                    <p className="text-gray-200 leading-relaxed break-words">{scroll.scroll_text}</p>
                   </div>
                 ))}
               </div>
@@ -1162,40 +1203,40 @@ export function WorldDashboard() {
               <div className="space-y-3">
                 {canonScrolls.map((scroll) => (
                   <div key={scroll.id} className="bg-gray-800 rounded-lg p-4 border-l-4 border-green-500">
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex items-center space-x-3">                        <div className="w-8 h-8 bg-green-600 rounded-full flex items-center justify-center">
+                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-3">
+                      <div className="flex items-center space-x-3 min-w-0 flex-1">                        <div className="w-8 h-8 bg-green-600 rounded-full flex items-center justify-center flex-shrink-0">
                           <span className="text-white text-sm font-medium">
                             {scroll.author.username[0].toUpperCase()}
                           </span>
                         </div>
-                        <div>
+                        <div className="min-w-0 flex-1">
                           <UserLink userId={scroll.author.id} username={scroll.author.username} />
                           <p className="text-gray-400 text-sm">
                             {new Date(scroll.created_at).toLocaleDateString()}
                           </p>
                         </div>
-                        <span className="px-2 py-1 bg-green-600 text-white text-xs rounded-full font-medium">
+                        <span className="px-2 py-1 bg-green-600 text-white text-xs rounded-full font-medium flex-shrink-0">
                           Canon
                         </span>
                       </div>
-                      <div className="flex space-x-2">
+                      <div className="flex flex-col sm:flex-row gap-2 self-start">
                         <button
                           onClick={() => removeFromCanon(scroll.id)}
-                          className="flex items-center px-3 py-1.5 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors text-sm font-medium"
+                          className="flex items-center justify-center px-3 py-1.5 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors text-sm font-medium"
                         >
                           <X className="h-4 w-4 mr-1" />
                           Remove
                         </button>
                         <button
                           onClick={() => deleteScroll(scroll.id)}
-                          className="flex items-center px-3 py-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium"
+                          className="flex items-center justify-center px-3 py-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium"
                         >
                           <Trash2 className="h-4 w-4 mr-1" />
                           Delete
                         </button>
                       </div>
                     </div>
-                    <p className="text-gray-200 leading-relaxed">{scroll.scroll_text}</p>
+                    <p className="text-gray-200 leading-relaxed break-words">{scroll.scroll_text}</p>
                   </div>
                 ))}
               </div>
@@ -1214,26 +1255,26 @@ export function WorldDashboard() {
               <div className="space-y-4">
                 {unansweredQuestions.map((question) => (
                   <div key={question.id} className="bg-gray-800 rounded-lg p-4 border-l-4 border-blue-500">
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex items-center space-x-3">                        <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
+                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-3">
+                      <div className="flex items-center space-x-3 min-w-0 flex-1">                        <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
                           <span className="text-white text-sm font-medium">
                             {question.author.username[0].toUpperCase()}
                           </span>
                         </div>
-                        <div>
+                        <div className="min-w-0">
                           <UserLink userId={question.author.id} username={question.author.username} />
                           <p className="text-gray-400 text-sm">
                             {new Date(question.created_at).toLocaleDateString()}
                           </p>
                         </div>
                       </div>
-                      <div className="flex items-center space-x-2 text-gray-400">
+                      <div className="flex items-center space-x-2 text-gray-400 flex-shrink-0">
                         <ArrowUp className="h-4 w-4" />
                         <span className="text-sm">{question.upvotes}</span>
                       </div>
                     </div>
-                    <p className="text-gray-200 mb-4 leading-relaxed">{question.question_text}</p>
-                    <div className="flex space-x-2">
+                    <p className="text-gray-200 mb-4 leading-relaxed break-words">{question.question_text}</p>
+                    <div className="flex flex-col sm:flex-row gap-2">
                       <input
                         type="text"
                         placeholder="Write your answer..."
@@ -1265,12 +1306,13 @@ export function WorldDashboard() {
           </div>
         )}        {activeTab === 'inhabitants' && (
           <div className="space-y-6">
-            <div className="flex justify-between items-center">
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
               <h3 className="text-lg font-medium text-white">World Inhabitants</h3>
               <span className="text-gray-400 text-sm">{inhabitants.length} members</span>
             </div>
             
             <div className="bg-gray-800 rounded-lg overflow-hidden">
+              {/* Table view for all screen sizes */}
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead className="bg-gray-700">

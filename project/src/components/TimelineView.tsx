@@ -131,12 +131,12 @@ export function TimelineView({
 
   return (    <div className="space-y-4">
       {/* Header with filters */}
-      <div className="flex justify-between items-center">
-        <div className="flex items-center space-x-4">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
           <h2 className="text-xl font-semibold text-white">Timeline</h2>
           <button
             onClick={() => setShowFilters(!showFilters)}
-            className="flex items-center px-3 py-1 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-colors"
+            className="flex items-center px-3 py-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-colors text-sm w-fit"
           >
             <Filter className="h-4 w-4 mr-1" />
             Filters
@@ -146,10 +146,10 @@ export function TimelineView({
         {onCreateNew && (
           <button
             onClick={onCreateNew}
-            className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+            className="flex items-center justify-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium w-full sm:w-auto"
           >
             <Plus className="h-4 w-4 mr-2" />
-            Add Entry
+            <span className="sm:inline">Add Entry</span>
           </button>
         )}
       </div>
@@ -157,7 +157,7 @@ export function TimelineView({
       {/* Filter panel */}
       {showFilters && (
         <div className="bg-gray-800 rounded-lg p-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">
                 Filter by Tag
@@ -165,7 +165,7 @@ export function TimelineView({
               <select
                 value={filterTag}
                 onChange={(e) => setFilterTag(e.target.value)}
-                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
               >
                 <option value="all">All Tags</option>               
                  {getUniqueTagsFromEntries().map(tag => (
@@ -190,23 +190,26 @@ export function TimelineView({
                 onClick={() => toggleEra(era)}
                 className="w-full px-4 py-3 bg-gray-750 hover:bg-gray-700 transition-colors flex items-center justify-between"
               >
-                <div className="flex items-center space-x-3">
+                <div className="flex items-center space-x-2 sm:space-x-3 min-w-0 flex-1">
                   {isExpanded ? (
-                    <ChevronDown className="h-5 w-5 text-gray-400" />
+                    <ChevronDown className="h-4 w-4 sm:h-5 sm:w-5 text-gray-400 flex-shrink-0" />
                   ) : (
-                    <ChevronRight className="h-5 w-5 text-gray-400" />
-                  )}                  <h3 className="text-lg font-semibold text-white">
-                    {era}
-                    {getEraYearRange(era) && (
-                      <span className="text-sm text-gray-400 font-normal ml-2">
-                        ({getEraYearRange(era)})
-                      </span>
-                    )}
-                  </h3>
-                  <span className="text-sm text-gray-400">
+                    <ChevronRight className="h-4 w-4 sm:h-5 sm:w-5 text-gray-400 flex-shrink-0" />
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-sm sm:text-lg font-semibold text-white break-words text-left">
+                      {era}
+                      {getEraYearRange(era) && (
+                        <span className="block sm:inline text-xs sm:text-sm text-gray-400 font-normal sm:ml-2">
+                          ({getEraYearRange(era)})
+                        </span>
+                      )}
+                    </h3>
+                  </div>
+                  <span className="text-xs sm:text-sm text-gray-400 flex-shrink-0">
                     {totalEvents} event{totalEvents !== 1 ? 's' : ''}
                     {privateEvents > 0 && isCreator && (
-                      <span className="ml-2 text-yellow-400">
+                      <span className="block sm:inline sm:ml-2 text-yellow-400">
                         ({privateEvents} private)
                       </span>
                     )}
@@ -214,7 +217,7 @@ export function TimelineView({
                 </div>
               </button>              {/* Era content */}
               {isExpanded && (
-                <div className="p-4">
+                <div className="p-3 sm:p-4">
                   <div className="space-y-3">
                     {entriesByEra[era].map((entry, index) => (
                       <div key={entry.id} className={index < entriesByEra[era].length - 1 ? '' : 'pb-0'}>
