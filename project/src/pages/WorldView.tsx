@@ -19,6 +19,14 @@ interface World {
   laws: string[];
   creator_id: string;
   creator: { id: string; username: string };
+  parent_world?: {
+    id: string;
+    title: string;
+    creator: {
+      id: string;
+      username: string;
+    };
+  };
 }
 
 interface Role {
@@ -129,7 +137,24 @@ export function WorldView() {
         .single();
 
       if (worldError) throw worldError;
-      setWorld(worldData);
+      
+      // Fetch parent world info if this is a fork
+      let parent_world = null;
+      if (worldData.origin_world_id) {
+        const { data: parentWorldData } = await supabase
+          .from('worlds')
+          .select(`
+            id,
+            title,
+            creator:users!creator_id(id, username)
+          `)
+          .eq('id', worldData.origin_world_id)
+          .single();
+        
+        parent_world = parentWorldData;
+      }
+      
+      setWorld({ ...worldData, parent_world });
 
       // Initialize fork data with original world data
       setForkData(prev => ({
@@ -658,19 +683,34 @@ export function WorldView() {
   const canonScrolls = scrolls;
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
+    <div className="max-w-6xl mx-auto space-y-6 px-4">
       {/* World Header */}
-      <div className=" rounded-lg p-6">
-        <div className="flex justify-between items-start mb-6">
-          <div className="flex-1">
-            <h1 className="text-3xl font-bold text-white mb-3">{world.title}</h1>
-            <p className="text-gray-300 text-lg leading-relaxed mb-4">{world.description}</p>            <p className="text-gray-400">
+      <div className=" rounded-lg p-4 sm:p-6">
+        <div className="flex flex-col lg:flex-row lg:justify-between lg:items-start gap-4 mb-6">
+          <div className="flex-1 min-w-0">
+            {/* Parent World Reference */}
+            {world.parent_world && (
+              <div className="mb-3 p-2 bg-gray-800/50 rounded-lg border-l-4 border-indigo-500">
+                <p className="text-sm text-gray-400 mb-1">Forked from:</p>
+                <Link
+                  to={`/world/${world.parent_world.id}`}
+                  className="text-indigo-400 hover:text-indigo-300 font-medium text-sm transition-colors"
+                >
+                  {world.parent_world.title}
+                </Link>
+                <span className="text-gray-500 text-sm ml-2">
+                  by <UserLink userId={world.parent_world.creator.id} username={world.parent_world.creator.username} />
+                </span>
+              </div>
+            )}
+            <h1 className="text-2xl sm:text-3xl font-bold text-white mb-3 break-words">{world.title}</h1>
+            <p className="text-gray-300 text-base sm:text-lg leading-relaxed mb-4">{world.description}</p>            <p className="text-gray-400 text-sm sm:text-base">
               Created by <UserLink userId={world.creator.id} username={world.creator.username} />
             </p>
-          </div>          <div className="flex space-x-3">
+          </div>          <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 w-full lg:w-auto">
             <button 
               onClick={() => setShowShareCard(true)}
-              className="flex items-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium"
+              className="flex items-center justify-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium text-sm"
             >
               <Share className="h-4 w-4 mr-2" />
               Share
@@ -678,7 +718,7 @@ export function WorldView() {
             {isCreator && (
               <Link
                 to={`/world/${worldId}/dashboard`}
-                className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium"
+                className="flex items-center justify-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium text-sm"
               >
                 <Settings className="h-4 w-4 mr-2" />
                 Dashboard
@@ -686,7 +726,7 @@ export function WorldView() {
             )}
             <button 
               onClick={() => setShowForkDialog(true)}
-              className="flex items-center px-4 py-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-colors font-medium"
+              className="flex items-center justify-center px-4 py-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-colors font-medium text-sm"
             >
               <GitBranch className="h-4 w-4 mr-2" />
               Fork World
@@ -697,11 +737,11 @@ export function WorldView() {
         {/* World Laws */}
         <div>
           <h3 className="text-lg font-semibold text-white mb-4">World Laws</h3>
-          <div className="grid md:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
             {world.laws.map((law, index) => (
               <div key={index} className="flex items-start space-x-3 p-4 rounded-lg bg-gray-700">
-                <span className="text-indigo-400 font-mono text-sm font-bold mt-0.5">{index + 1}.</span>
-                <p className="text-gray-200 text-sm leading-relaxed">{law}</p>
+                <span className="text-indigo-400 font-mono text-sm font-bold mt-0.5 flex-shrink-0">{index + 1}.</span>
+                <p className="text-gray-200 text-sm leading-relaxed break-words min-w-0">{law}</p>
               </div>
             ))}
           </div>
@@ -709,7 +749,7 @@ export function WorldView() {
       </div>
 
       {/* Timeline Section - Below Laws */}
-      <div className="bg-gray-800 rounded-lg p-6">
+      <div className="bg-gray-800 rounded-lg p-3 sm:p-6">
         <TimelineView
           entries={timelineEntries}
           isCreator={isCreator}
@@ -726,8 +766,8 @@ export function WorldView() {
 
       {/* New Roles Notification for Existing Inhabitants */}
       {user && userRole && newRoles.length > 0 && (
-        <div className="bg-gray-800 rounded-lg p-6 border border-indigo-500">
-          <div className="flex items-start justify-between mb-4">
+        <div className="bg-gray-800 rounded-lg p-4 sm:p-6 border border-indigo-500">
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-4">
             <div>
               <h3 className="text-lg font-semibold text-white mb-2 flex items-center">
                 <Users className="h-5 w-5 mr-2" />
@@ -743,7 +783,7 @@ export function WorldView() {
             </div>
           </div>
           
-          <div className="grid md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {newRoles.map((role) => {
               const currentRole = roles.find(r => r.id === userRole);
               return (
@@ -779,13 +819,13 @@ export function WorldView() {
             })}
           </div>
             <div className="mt-4 pt-4 border-t border-gray-700">
-            <div className="flex justify-between items-center">
-              <p className="text-gray-400 text-xs">
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
+              <p className="text-gray-400 text-xs leading-relaxed">
                 💡 Tip: Switching roles will update your permissions and how others see you in this world. You can only have one role at a time.
               </p>
               <button
                 onClick={markRolesAsSeen}
-                className="px-3 py-1 text-gray-400 hover:text-white text-sm border border-gray-600 hover:border-gray-500 rounded transition-colors"
+                className="px-3 py-1 text-gray-400 hover:text-white text-sm border border-gray-600 hover:border-gray-500 rounded transition-colors self-start sm:self-auto"
               >
                 Dismiss All
               </button>
@@ -796,12 +836,12 @@ export function WorldView() {
 
       {/* Role Selection */}
       {user && !userRole && roles.length > 0 && (
-        <div className="bg-gray-800 rounded-lg p-6">
+        <div className="bg-gray-800 rounded-lg p-4 sm:p-6">
           <h3 className="text-lg font-semibold text-white mb-4">
             <Users className="h-5 w-5 inline mr-2" />
             Choose Your Role
           </h3>
-          <div className="grid md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {roles.map((role) => (
               <div key={role.id} className="p-4 bg-gray-700 rounded-lg border border-gray-600 hover:border-indigo-500 transition-colors">
                 <h4 className="font-medium text-white mb-2">{role.name}</h4>
@@ -819,8 +859,8 @@ export function WorldView() {
       )}
 
       {/* Navigation Tabs */}
-      <div className="border-b border-gray-700">
-        <nav className="flex space-x-8">
+      <div className="border-b border-gray-700 overflow-x-auto">
+        <nav className="flex space-x-4 sm:space-x-8 min-w-max px-4 sm:px-0">
           {[
             { id: 'overview', label: 'Overview' },
             { id: 'community', label: 'Community', count: communityPosts.length },
@@ -831,7 +871,7 @@ export function WorldView() {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`px-1 py-3 font-medium text-sm border-b-2 transition-colors ${
+              className={`flex items-center px-1 py-3 font-medium text-sm border-b-2 transition-colors whitespace-nowrap ${
                 activeTab === tab.id
                   ? 'border-indigo-500 text-indigo-400'
                   : 'border-transparent text-gray-400 hover:text-gray-300'
@@ -851,8 +891,8 @@ export function WorldView() {
       {/* Tab Content */}
       <div className="space-y-6">
         {activeTab === 'overview' && (
-          <div className="grid md:grid-cols-3 gap-6">
-            <div className="bg-gray-800 rounded-lg p-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="bg-gray-800 rounded-lg p-4 sm:p-6">
               <h3 className="text-lg font-semibold text-white mb-4">
                 <MessageCircle className="h-5 w-5 inline mr-2" />
                 Community Posts
@@ -883,7 +923,7 @@ export function WorldView() {
               </div>
             </div>
 
-            <div className="bg-gray-800 rounded-lg p-6">
+            <div className="bg-gray-800 rounded-lg p-4 sm:p-6">
               <h3 className="text-lg font-semibold text-white mb-4">
                 <MessageSquare className="h-5 w-5 inline mr-2" />
                 Recent Questions
@@ -906,7 +946,7 @@ export function WorldView() {
               </div>
             </div>
 
-            <div className="bg-gray-800 rounded-lg p-6">
+            <div className="bg-gray-800 rounded-lg p-4 sm:p-6">
               <h3 className="text-lg font-semibold text-white mb-4">
                 <Scroll className="h-5 w-5 inline mr-2" />
                 Canon Lore
@@ -933,7 +973,7 @@ export function WorldView() {
         {activeTab === 'community' && (
           <div className="space-y-6">
             {user && (
-              <div className="brounded-lg p-6">
+              <div className="bg-gray-800 rounded-lg p-4 sm:p-6">
                 <h3 className="text-lg font-semibold text-white mb-4">Create a Post</h3>
                 <div className="space-y-4">
                   <input
@@ -941,7 +981,7 @@ export function WorldView() {
                     value={newPost.title}
                     onChange={(e) => setNewPost(prev => ({ ...prev, title: e.target.value }))}
                     placeholder="Post title..."
-                    className="w-full px-4 py-3 bg-gray-700  border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                   />
                   <textarea
                     value={newPost.content}
@@ -966,33 +1006,35 @@ export function WorldView() {
 
             <div className="space-y-4">
               {communityPosts.map((post) => (
-                <div key={post.id} className=" bg-gray-800 rounded-lg p-6 border border-gray-700 hover:border-gray-600 transition-colors">
+                <div key={post.id} className="bg-gray-800 rounded-lg p-4 sm:p-6 border border-gray-700 hover:border-gray-600 transition-colors">
                   <div className="flex items-start justify-between mb-4">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-10 h-10 bg-indigo-600 rounded-full flex items-center justify-center">
+                    <div className="flex items-center space-x-3 min-w-0 flex-1">
+                      <div className="w-10 h-10 bg-indigo-600 rounded-full flex items-center justify-center flex-shrink-0">
                         <span className="text-white font-medium">
                           {post.author.username[0].toUpperCase()}
                         </span>
-                      </div>                      <div>
+                      </div>                      <div className="min-w-0">
                         <UserLink userId={post.author.id} username={post.author.username} />
                         <p className="text-gray-400 text-sm">
                           {new Date(post.created_at).toLocaleDateString()}
                         </p>
                       </div>
                     </div>
-                    <VotingSystem
-                      targetType="community_post"
-                      targetId={post.id}
-                      currentVotes={post.upvotes}
-                      onVoteChange={(newVoteCount) => handlePostVoteChange(post.id, newVoteCount)}
-                    />
+                    <div className="flex-shrink-0 ml-4">
+                      <VotingSystem
+                        targetType="community_post"
+                        targetId={post.id}
+                        currentVotes={post.upvotes}
+                        onVoteChange={(newVoteCount) => handlePostVoteChange(post.id, newVoteCount)}
+                      />
+                    </div>
                   </div>
                   
                   <Link to={`/world/${worldId}/community/${post.id}`} className="block">
-                    <h3 className="text-xl font-semibold text-white mb-3 hover:text-indigo-400 transition-colors">
+                    <h3 className="text-lg sm:text-xl font-semibold text-white mb-3 hover:text-indigo-400 transition-colors break-words">
                       {post.title}
                     </h3>
-                    <p className="text-gray-200 leading-relaxed mb-4">
+                    <p className="text-gray-200 leading-relaxed mb-4 break-words">
                       {truncateText(post.content, 200)}
                     </p>
                   </Link>
@@ -1029,9 +1071,9 @@ export function WorldView() {
         {activeTab === 'questions' && (
           <div className="space-y-6">
             {user && userRole && (
-              <div className=" rounded-lg p-6">
+              <div className="bg-gray-800 rounded-lg p-4 sm:p-6">
                 <h3 className="text-lg font-semibold text-white mb-4">Ask a Question</h3>
-                <div className="flex space-x-3">
+                <div className="flex flex-col sm:flex-row gap-3">
                   <input
                     type="text"
                     value={newQuestion}
@@ -1047,7 +1089,7 @@ export function WorldView() {
                   <button
                     onClick={submitQuestion}
                     disabled={!newQuestion.trim()}
-                    className="flex items-center px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+                    className="flex items-center justify-center px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
                   >
                     <Send className="h-4 w-4 mr-2" />
                     Ask
@@ -1058,28 +1100,30 @@ export function WorldView() {
 
             <div className="space-y-4">
               {questions.map((question) => (
-                <div key={question.id} className="bg-gray-800 rounded-lg p-6">
-                  <div className="flex justify-between items-start mb-4">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-8 h-8 bg-indigo-600 rounded-full flex items-center justify-center">
+                <div key={question.id} className="bg-gray-800 rounded-lg p-4 sm:p-6">
+                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-4">
+                    <div className="flex items-center space-x-3 min-w-0 flex-1">
+                      <div className="w-8 h-8 bg-indigo-600 rounded-full flex items-center justify-center flex-shrink-0">
                         <span className="text-white text-sm font-medium">
                           {question.author.username[0].toUpperCase()}
                         </span>
-                      </div>                      <div>
+                      </div>                      <div className="min-w-0">
                         <UserLink userId={question.author.id} username={question.author.username} />
                         <p className="text-gray-400 text-sm">
                           {new Date(question.created_at).toLocaleDateString()}
                         </p>
                       </div>
                     </div>
-                    <VotingSystem
-                      targetType="question"
-                      targetId={question.id}
-                      currentVotes={question.upvotes}
-                      onVoteChange={(newVoteCount) => handleQuestionVoteChange(question.id, newVoteCount)}
-                    />
+                    <div className="flex-shrink-0">
+                      <VotingSystem
+                        targetType="question"
+                        targetId={question.id}
+                        currentVotes={question.upvotes}
+                        onVoteChange={(newVoteCount) => handleQuestionVoteChange(question.id, newVoteCount)}
+                      />
+                    </div>
                   </div>
-                  <h4 className="text-white font-medium mb-3 leading-relaxed">{question.question_text}</h4>
+                  <h4 className="text-white font-medium mb-3 leading-relaxed break-words">{question.question_text}</h4>
                   {question.answer && (
                     <div className="mt-4 p-4 bg-gray-700 rounded-lg border-l-4 border-indigo-500">
                       <p className="text-gray-200 leading-relaxed">{question.answer}</p>
@@ -1100,7 +1144,7 @@ export function WorldView() {
         {activeTab === 'lore' && (
           <div className="space-y-6">
             {user && userRole && (
-              <div className=" rounded-lg p-6">
+              <div className="bg-gray-800 rounded-lg p-4 sm:p-6">
                 <h3 className="text-lg font-semibold text-white mb-4">Submit a Scroll</h3>
                 <div className="space-y-3">
                   <textarea
@@ -1110,14 +1154,14 @@ export function WorldView() {
                     rows={4}
                     className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none"
                   />
-                  <div className="flex justify-between items-center">
+                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
                     <p className="text-gray-400 text-sm">
                       Your scroll will be reviewed by the world creator before becoming canon.
                     </p>
                     <button
                       onClick={submitScroll}
                       disabled={!newScroll.trim()}
-                      className="flex items-center px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+                      className="flex items-center justify-center px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium self-start sm:self-auto"
                     >
                       <Send className="h-4 w-4 mr-2" />
                       Submit
@@ -1129,25 +1173,25 @@ export function WorldView() {
 
             <div className="space-y-4">
               {canonScrolls.map((scroll) => (
-                <div key={scroll.id} className="bg-gray-800 rounded-lg p-6 border-l-4 border-green-500">
-                  <div className="flex justify-between items-start mb-4">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-8 h-8 bg-green-600 rounded-full flex items-center justify-center">
+                <div key={scroll.id} className="bg-gray-800 rounded-lg p-4 sm:p-6 border-l-4 border-green-500">
+                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-4">
+                    <div className="flex items-center space-x-3 min-w-0 flex-1">
+                      <div className="w-8 h-8 bg-green-600 rounded-full flex items-center justify-center flex-shrink-0">
                         <span className="text-white text-sm font-medium">
                           {scroll.author.username[0].toUpperCase()}
                         </span>
-                      </div>                      <div>
+                      </div>                      <div className="min-w-0">
                         <UserLink userId={scroll.author.id} username={scroll.author.username} />
                         <p className="text-gray-400 text-sm">
                           {new Date(scroll.created_at).toLocaleDateString()}
                         </p>
                       </div>
                     </div>
-                    <span className="px-3 py-1 bg-green-600 text-white text-xs rounded-full font-medium">
+                    <span className="px-3 py-1 bg-green-600 text-white text-xs rounded-full font-medium flex-shrink-0 self-start">
                       Canon
                     </span>
                   </div>
-                  <p className="text-gray-200 leading-relaxed">{scroll.scroll_text}</p>
+                  <p className="text-gray-200 leading-relaxed break-words">{scroll.scroll_text}</p>
                 </div>
               ))}
               {canonScrolls.length === 0 && (
@@ -1180,7 +1224,7 @@ export function WorldView() {
                   <div key={category} className="bg-gray-800 rounded-lg overflow-hidden">
                     <button
                       onClick={() => toggleCategory(category)}
-                      className="w-full px-6 py-4 bg-gray-700 hover:bg-gray-600 transition-colors flex items-center justify-between"
+                      className="w-full px-4 sm:px-6 py-4 bg-gray-700 hover:bg-gray-600 transition-colors flex items-center justify-between"
                     >
                       <div className="flex items-center space-x-3">
                         <BookOpen className="h-5 w-5 text-indigo-400" />
@@ -1197,7 +1241,7 @@ export function WorldView() {
                     </button>
                     
                     {expandedCategories[category] && (
-                      <div className="p-6 grid md:grid-cols-2 gap-4">
+                      <div className="p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-2 gap-4">
                         {records.map((record) => (
                           <WorldRecordCard
                             key={record.id}
@@ -1264,9 +1308,9 @@ export function WorldView() {
       {/* Enhanced Fork Dialog (keeping existing code) */}
       {showForkDialog && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-gray-800 rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+          <div className="bg-gray-800 rounded-lg p-4 sm:p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-semibold text-white">Fork "{world.title}"</h3>
+              <h3 className="text-lg sm:text-xl font-semibold text-white">Fork "{world.title}"</h3>
               <button
                 onClick={() => setShowForkDialog(false)}
                 className="text-gray-400 hover:text-white"
@@ -1277,7 +1321,7 @@ export function WorldView() {
             
             <div className="space-y-6">
               {/* Basic Info */}
-              <div className="grid md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
                     New World Title *
@@ -1438,20 +1482,20 @@ export function WorldView() {
               </div>
             </div>
 
-            <div className="flex justify-end space-x-3 mt-8">
-              <button
-                onClick={() => setShowForkDialog(false)}
-                className="px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-500 transition-colors font-medium"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={forkWorld}
-                disabled={!forkData.title.trim() || !forkData.description.trim()}
-                className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
-              >
-                Fork World
-              </button>            </div>
+              <div className="flex flex-col sm:flex-row gap-3 mt-8">
+                <button
+                  onClick={() => setShowForkDialog(false)}
+                  className="px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-500 transition-colors font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={forkWorld}
+                  disabled={!forkData.title.trim() || !forkData.description.trim()}
+                  className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+                >
+                  Fork World
+                </button>            </div>
           </div>
         </div>
       )}

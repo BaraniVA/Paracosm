@@ -13,6 +13,14 @@ interface World {
     id: string;
     username: string;
   };
+  parent_world?: {
+    id: string;
+    title: string;
+    creator: {
+      id: string;
+      username: string;
+    };
+  };
   inhabitants_count: number;
   canon_scrolls_count: number;
   questions_count: number;
@@ -40,7 +48,7 @@ export function ExploreWorlds() {
 
   const fetchWorlds = async () => {
     try {
-      // Fetch all worlds with creator info
+      // Fetch all worlds with creator info (simplified query)
       const { data: worldsData, error: worldsError } = await supabase
         .from('worlds')
         .select(`
@@ -51,7 +59,7 @@ export function ExploreWorlds() {
 
       if (worldsError) throw worldsError;
 
-      // Get counts for each world
+      // Get counts for each world and parent world info
       const worldsWithCounts = await Promise.all(
         (worldsData || []).map(async (world) => {
           const [
@@ -79,8 +87,25 @@ export function ExploreWorlds() {
               .eq('world_id', world.id)
           ]);
 
+          // Fetch parent world info if this is a fork
+          let parent_world = null;
+          if (world.origin_world_id) {
+            const { data: parentWorldData } = await supabase
+              .from('worlds')
+              .select(`
+                id,
+                title,
+                creator:users!creator_id(id, username)
+              `)
+              .eq('id', world.origin_world_id)
+              .single();
+            
+            parent_world = parentWorldData;
+          }
+
           return { 
             ...world, 
+            parent_world,
             inhabitants_count: inhabitantCount || 0,
             canon_scrolls_count: canonScrollCount || 0,
             questions_count: questionsCount || 0,
@@ -92,6 +117,8 @@ export function ExploreWorlds() {
       setWorlds(worldsWithCounts);
     } catch (error) {
       console.error('Error fetching worlds:', error);
+      // Set empty array so the page still renders
+      setWorlds([]);
     } finally {
       setLoading(false);
     }
@@ -196,9 +223,40 @@ export function ExploreWorlds() {
                 {(['newest', 'oldest', 'most_popular', 'most_active'] as SortOption[]).map((option) => (
                   <button
                     key={option}
-                    onClick={() => {
+                    onClick={(e) => {
+                      e.stopPropagation();
                       setSortBy(option);
                       setShowFilters(false);
+                      
+                      // Immediately apply the new sort to avoid delay
+                      let filtered = worlds;
+                      if (searchTerm.trim()) {
+                        filtered = filtered.filter(world =>
+                          world.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          world.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          world.creator.username.toLowerCase().includes(searchTerm.toLowerCase())
+                        );
+                      }
+                      
+                      switch (option) {
+                        case 'newest':
+                          filtered.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+                          break;
+                        case 'oldest':
+                          filtered.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+                          break;
+                        case 'most_popular':
+                          filtered.sort((a, b) => b.inhabitants_count - a.inhabitants_count);
+                          break;
+                        case 'most_active':
+                          filtered.sort((a, b) => 
+                            (b.community_posts_count + b.questions_count + b.canon_scrolls_count) - 
+                            (a.community_posts_count + a.questions_count + a.canon_scrolls_count)
+                          );
+                          break;
+                      }
+                      
+                      setFilteredWorlds(filtered);
                     }}
                     className={`w-full px-4 py-3 text-left hover:bg-gray-600 transition-colors ${
                       sortBy === option ? 'bg-indigo-600 text-white' : 'text-gray-300'
@@ -234,6 +292,12 @@ export function ExploreWorlds() {
               {/* World Header */}
               <div className="flex items-start justify-between mb-4">
                 <div className="flex-1 min-w-0">
+                  {/* Parent World Reference */}
+                  {world.parent_world && (
+                    <div className="mb-2 text-xs text-gray-500">
+                      Fork of: <span className="text-indigo-400">{world.parent_world.title}</span>
+                    </div>
+                  )}
                   <h3 className="text-xl font-semibold text-white mb-2 group-hover:text-indigo-400 transition-colors line-clamp-2">
                     {world.title}
                   </h3>                  <div className="flex items-center space-x-2 text-gray-400 text-sm mb-3">
