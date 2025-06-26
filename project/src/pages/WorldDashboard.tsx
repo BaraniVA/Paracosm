@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
+import { notifyUserInteraction } from '../lib/notifications';
 import { Users, MessageSquare, Scroll, GitBranch, Settings, Check, X, Trash2, ArrowUp, Edit, Save, Plus, BookOpen, UserX } from 'lucide-react';
 import { CreateEditWorldRecordForm } from '../components/CreateEditWorldRecordForm';
 import { TimelineView } from '../components/TimelineView';
@@ -547,6 +548,9 @@ export function WorldDashboard() {
 
   const answerQuestion = async (questionId: string, answer: string) => {
     try {
+      // First get the question details to find the author
+      const question = questions.find(q => q.id === questionId);
+      
       const { error } = await supabase
         .from('questions')
         .update({
@@ -556,6 +560,25 @@ export function WorldDashboard() {
         .eq('id', questionId);
 
       if (error) throw error;
+      
+      // Notify the question author
+      if (question && user && question.author.id !== user.id) {
+        // Get the username from the question author data
+        const authorData = await supabase
+          .from('users')
+          .select('username')
+          .eq('id', user.id)
+          .single();
+          
+        await notifyUserInteraction({
+          targetUserId: question.author.id,
+          fromUserId: user.id,
+          fromUsername: authorData.data?.username || 'Someone',
+          action: 'answered_question',
+          context: world?.title || 'your world',
+          actionUrl: `/world/${worldId}/dashboard`
+        });
+      }
       
       // Clear the input
       setAnswerInputs(prev => ({ ...prev, [questionId]: '' }));
@@ -569,6 +592,9 @@ export function WorldDashboard() {
 
   const approveScroll = async (scrollId: string) => {
     try {
+      // First get the scroll details to find the author
+      const scroll = allScrolls.find(s => s.id === scrollId);
+      
       const { error } = await supabase
         .from('scrolls')
         .update({
@@ -578,6 +604,26 @@ export function WorldDashboard() {
         .eq('id', scrollId);
 
       if (error) throw error;
+      
+      // Notify the scroll author
+      if (scroll && user && scroll.author.id !== user.id) {
+        // Get the username from the current user
+        const authorData = await supabase
+          .from('users')
+          .select('username')
+          .eq('id', user.id)
+          .single();
+          
+        await notifyUserInteraction({
+          targetUserId: scroll.author.id,
+          fromUserId: user.id,
+          fromUsername: authorData.data?.username || 'Someone',
+          action: 'approved_lore',
+          context: world?.title || 'your world',
+          actionUrl: `/world/${worldId}/dashboard`
+        });
+      }
+      
       fetchWorldData();
     } catch (error) {
       console.error('Error approving scroll:', error);
@@ -590,6 +636,28 @@ export function WorldDashboard() {
     }
 
     try {
+      // First get the scroll details to find the author
+      const scroll = allScrolls.find(s => s.id === scrollId);
+      
+      // Notify the scroll author before deletion
+      if (scroll && user && scroll.author.id !== user.id) {
+        // Get the username from the current user
+        const authorData = await supabase
+          .from('users')
+          .select('username')
+          .eq('id', user.id)
+          .single();
+          
+        await notifyUserInteraction({
+          targetUserId: scroll.author.id,
+          fromUserId: user.id,
+          fromUsername: authorData.data?.username || 'Someone',
+          action: 'rejected_lore',
+          context: world?.title || 'your world',
+          actionUrl: `/world/${worldId}/dashboard`
+        });
+      }
+
       const { error } = await supabase
         .from('scrolls')
         .delete()

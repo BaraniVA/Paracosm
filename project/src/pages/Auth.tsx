@@ -136,6 +136,17 @@ export function Auth() {
                 {isLogin ? 'Sign up' : 'Sign in'}
               </button>
             </p>
+            {isLogin && (
+              <p className="text-sm text-gray-400 mt-2">
+                <button
+                  type="button"
+                  onClick={() => navigate('/forgot-password')}
+                  className="font-medium text-indigo-400 hover:text-indigo-300"
+                >
+                  Forgot your password?
+                </button>
+              </p>
+            )}
           </div>
         </form>
       </div>

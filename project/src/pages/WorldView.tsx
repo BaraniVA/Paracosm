@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
+import { notifyWorldOwner } from '../lib/notifications';
 import { ArrowUp, MessageSquare, Scroll, GitBranch, Settings, Users, Send, Plus, X, MessageCircle, BookOpen, ChevronDown, ChevronRight, Share } from 'lucide-react';
 import { WorldRecordCard } from '../components/WorldRecordCard';
 import { WorldRecordModal } from '../components/WorldRecordModal';
@@ -447,6 +448,20 @@ export function WorldView() {
         ]);
 
       if (error) throw error;
+
+      // Notify world owner if questioner is not the owner
+      if (world && world.creator_id !== user.id) {
+        await notifyWorldOwner({
+          worldId: worldId,
+          worldOwnerId: world.creator_id,
+          fromUserId: user.id,
+          fromUsername: user.user_metadata?.username || user.email?.split('@')[0] || 'Anonymous',
+          worldName: world.title,
+          action: 'asked',
+          actionUrl: `/world/${worldId}`
+        });
+      }
+
       setNewQuestion('');
       fetchWorldData();
     } catch (error) {
@@ -469,6 +484,20 @@ export function WorldView() {
         ]);
 
       if (error) throw error;
+
+      // Notify world owner if submitter is not the owner
+      if (world && world.creator_id !== user.id) {
+        await notifyWorldOwner({
+          worldId: worldId,
+          worldOwnerId: world.creator_id,
+          fromUserId: user.id,
+          fromUsername: user.user_metadata?.username || user.email?.split('@')[0] || 'Anonymous',
+          worldName: world.title,
+          action: 'submitted_lore',
+          actionUrl: `/world/${worldId}/dashboard`
+        });
+      }
+
       setNewScroll('');
       alert('Your scroll has been submitted for review by the world creator!');
     } catch (error) {
@@ -480,7 +509,7 @@ export function WorldView() {
     if (!user || !worldId || !newPost.title.trim() || !newPost.content.trim()) return;
 
     try {
-      const { error } = await supabase
+      const { data: insertedPost, error } = await supabase
         .from('community_posts')
         .insert([
           {
@@ -489,9 +518,25 @@ export function WorldView() {
             title: newPost.title.trim(),
             content: newPost.content.trim(),
           },
-        ]);
+        ])
+        .select()
+        .single();
 
       if (error) throw error;
+
+      // Notify world owner if poster is not the owner
+      if (world && world.creator_id !== user.id) {
+        await notifyWorldOwner({
+          worldId: worldId,
+          worldOwnerId: world.creator_id,
+          fromUserId: user.id,
+          fromUsername: user.user_metadata?.username || user.email?.split('@')[0] || 'Anonymous',
+          worldName: world.title,
+          action: 'posted',
+          actionUrl: `/world/${worldId}/community/${insertedPost.id}`
+        });
+      }
+
       setNewPost({ title: '', content: '' });
       fetchWorldData();
     } catch (error) {
@@ -1026,6 +1071,8 @@ export function WorldView() {
                         targetId={post.id}
                         currentVotes={post.upvotes}
                         onVoteChange={(newVoteCount) => handlePostVoteChange(post.id, newVoteCount)}
+                        targetAuthorId={post.author.id}
+                        worldName={world?.title}
                       />
                     </div>
                   </div>
@@ -1120,6 +1167,8 @@ export function WorldView() {
                         targetId={question.id}
                         currentVotes={question.upvotes}
                         onVoteChange={(newVoteCount) => handleQuestionVoteChange(question.id, newVoteCount)}
+                        targetAuthorId={question.author.id}
+                        worldName={world?.title}
                       />
                     </div>
                   </div>
