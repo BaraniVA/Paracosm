@@ -15,7 +15,7 @@ export function useAuth() {
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+      async (_event, session) => {
         setUser(session?.user ?? null);
         setLoading(false);
       }
@@ -74,11 +74,30 @@ export function useAuth() {
     if (error) throw error;
   };
 
+  const resetPassword = async (email: string) => {
+    // Use the current origin (localhost in dev, vercel in production)
+    const redirectUrl = `${window.location.origin}/reset-password`;
+    
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: redirectUrl,
+    });
+    if (error) throw error;
+  };
+
+  const updatePassword = async (newPassword: string) => {
+    const { error } = await supabase.auth.updateUser({
+      password: newPassword,
+    });
+    if (error) throw error;
+  };
+
   return {
     user,
     loading,
     signUp,
     signIn,
     signOut,
+    resetPassword,
+    updatePassword,
   };
 }

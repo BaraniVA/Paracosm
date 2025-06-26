@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
-import { BookOpen, LogOut, User, Home, Plus, Compass } from 'lucide-react';
+import { useNotifications } from '../hooks/useNotifications';
+import { BookOpen, LogOut, User, Home, Plus, Compass, Scroll, Menu, X } from 'lucide-react';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -10,6 +11,24 @@ interface LayoutProps {
 export function Layout({ children }: LayoutProps) {
   const { user, signOut } = useAuth();
   const location = useLocation();
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  
+  // Get unread count from the shared notification context
+  let unreadCount = 0;
+  let notificationsAvailable = false;
+  
+  try {
+    const notificationState = useNotifications();
+    unreadCount = notificationState.unreadCount;
+    notificationsAvailable = true;
+  } catch {
+    // If notifications are not available (e.g., user not logged in), show 0
+    unreadCount = 0;
+    notificationsAvailable = false;
+  }
+  
+  // Only show badge if user is logged in and notifications are available
+  const showBadge = user && notificationsAvailable && unreadCount > 0;
 
   const isActive = (path: string) => location.pathname === path;
 
@@ -33,83 +52,179 @@ export function Layout({ children }: LayoutProps) {
               </Link>
             </div>
 
-            <div className="flex items-center space-x-2 sm:space-x-4">
+            {/* Desktop Navigation */}
+            <div className="hidden md:flex items-center space-x-4">
               {user ? (
                 <>
                   <Link
                     to="/"
-                    className={`px-2 sm:px-3 py-2 rounded-md text-xs sm:text-sm font-medium transition-colors ${
+                    className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
                       isActive('/') 
                         ? 'bg-indigo-600 text-white' 
                         : 'text-gray-300 hover:bg-gray-700 hover:text-white'
                     }`}
                   >
                     <Home className="h-4 w-4 inline mr-1" />
-                    <span className="hidden sm:inline">Home</span>
+                    Home
                   </Link>
                   <Link
                     to="/explore"
-                    className={`px-2 sm:px-3 py-2 rounded-md text-xs sm:text-sm font-medium transition-colors ${
+                    className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
                       isActive('/explore') 
                         ? 'bg-indigo-600 text-white' 
                         : 'text-gray-300 hover:bg-gray-700 hover:text-white'
                     }`}
                   >
                     <Compass className="h-4 w-4 inline mr-1" />
-                    <span className="hidden sm:inline">Explore</span>
+                    Explore
                   </Link>
                   <Link
                     to="/create-world"
-                    className={`px-2 sm:px-3 py-2 rounded-md text-xs sm:text-sm font-medium transition-colors ${
+                    className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
                       isActive('/create-world') 
                         ? 'bg-indigo-600 text-white' 
                         : 'text-gray-300 hover:bg-gray-700 hover:text-white'
                     }`}
                   >
                     <Plus className="h-4 w-4 inline mr-1" />
-                    <span className="hidden sm:inline">Create</span>
+                    Create
+                  </Link>
+                  <Link
+                    to="/chronicle"
+                    className={`px-3 py-2 rounded-md text-sm font-medium transition-colors relative ${
+                      isActive('/chronicle') 
+                        ? 'bg-indigo-600 text-white' 
+                        : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+                    }`}
+                  >
+                    <Scroll className="h-4 w-4 inline mr-1" />
+                    Chronicle
+                    {showBadge && (
+                      <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                        {unreadCount > 99 ? '99+' : unreadCount}
+                      </span>
+                    )}
                   </Link>
                   <Link
                     to="/profile"
-                    className={`px-2 sm:px-3 py-2 rounded-md text-xs sm:text-sm font-medium transition-colors ${
+                    className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
                       isActive('/profile') 
                         ? 'bg-indigo-600 text-white' 
                         : 'text-gray-300 hover:bg-gray-700 hover:text-white'
                     }`}
                   >
                     <User className="h-4 w-4 inline mr-1" />
-                    <span className="hidden sm:inline">Profile</span>
+                    Profile
                   </Link>
                   <button
                     onClick={handleSignOut}
-                    className="px-2 sm:px-3 py-2 rounded-md text-xs sm:text-sm font-medium text-gray-300 hover:bg-gray-700 hover:text-white transition-colors"
+                    className="px-3 py-2 rounded-md text-sm font-medium text-gray-300 hover:bg-gray-700 hover:text-white transition-colors"
                   >
                     <LogOut className="h-4 w-4 inline mr-1" />
-                    <span className="hidden sm:inline">Sign Out</span>
+                    Sign Out
                   </button>
                 </>
               ) : (
                 <>
                   <Link
                     to="/explore"
-                    className={`px-2 sm:px-3 py-2 rounded-md text-xs sm:text-sm font-medium transition-colors ${
+                    className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
                       isActive('/explore') 
                         ? 'bg-indigo-600 text-white' 
                         : 'text-gray-300 hover:bg-gray-700 hover:text-white'
                     }`}
                   >
                     <Compass className="h-4 w-4 inline mr-1" />
-                    <span className="hidden sm:inline">Explore</span>
+                    Explore
                   </Link>
                   <Link
                     to="/login"
-                    className="px-2 sm:px-3 py-2 rounded-md text-xs sm:text-sm font-medium text-gray-300 hover:bg-gray-700 hover:text-white transition-colors"
+                    className="px-3 py-2 rounded-md text-sm font-medium text-gray-300 hover:bg-gray-700 hover:text-white transition-colors"
                   >
                     Login
                   </Link>
                   <Link
                     to="/signup"
-                    className="px-2 sm:px-3 py-2 rounded-md text-xs sm:text-sm font-medium bg-indigo-600 text-white hover:bg-indigo-700 transition-colors"
+                    className="px-3 py-2 rounded-md text-sm font-medium bg-indigo-600 text-white hover:bg-indigo-700 transition-colors"
+                  >
+                    Sign Up
+                  </Link>
+                </>
+              )}
+            </div>
+
+            {/* Mobile Navigation */}
+            <div className="md:hidden flex items-center space-x-2">
+              {user ? (
+                <>
+                  {/* Quick access icons for most important actions */}
+                  <Link
+                    to="/explore"
+                    className={`p-2 rounded-md transition-colors ${
+                      isActive('/explore') 
+                        ? 'bg-indigo-600 text-white' 
+                        : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+                    }`}
+                  >
+                    <Compass className="h-6 w-6" />
+                  </Link>
+                  
+                  <Link
+                    to="/create-world"
+                    className={`p-2 rounded-md transition-colors ${
+                      isActive('/create-world') 
+                        ? 'bg-indigo-600 text-white' 
+                        : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+                    }`}
+                  >
+                    <Plus className="h-6 w-6" />
+                  </Link>
+                  
+                  <Link
+                    to="/chronicle"
+                    className={`p-2 rounded-md transition-colors relative ${
+                      isActive('/chronicle') 
+                        ? 'bg-indigo-600 text-white' 
+                        : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+                    }`}
+                  >
+                    <Scroll className="h-6 w-6" />
+                    {showBadge && (
+                      <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                        {unreadCount > 99 ? '99+' : unreadCount}
+                      </span>
+                    )}
+                  </Link>
+                  
+                  {/* Mobile menu button */}
+                  <button
+                    onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                    className="p-2 rounded-md text-gray-300 hover:bg-gray-700 hover:text-white transition-colors"
+                  >
+                    {isMobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <Link
+                    to="/explore"
+                    className={`p-2 rounded-md transition-colors ${
+                      isActive('/explore') 
+                        ? 'bg-indigo-600 text-white' 
+                        : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+                    }`}
+                  >
+                    <Compass className="h-6 w-6" />
+                  </Link>
+                  <Link
+                    to="/login"
+                    className="px-3 py-2 rounded-md text-sm font-medium text-gray-300 hover:bg-gray-700 hover:text-white transition-colors"
+                  >
+                    Login
+                  </Link>
+                  <Link
+                    to="/signup"
+                    className="px-3 py-2 rounded-md text-sm font-medium bg-indigo-600 text-white hover:bg-indigo-700 transition-colors"
                   >
                     Sign Up
                   </Link>
@@ -118,6 +233,48 @@ export function Layout({ children }: LayoutProps) {
             </div>
           </div>
         </div>
+        
+        {/* Mobile Menu Dropdown */}
+        {isMobileMenuOpen && user && (
+          <div className="md:hidden border-t border-gray-700 bg-gray-800">
+            <div className="px-4 py-2 space-y-1">
+              <Link
+                to="/"
+                onClick={() => setIsMobileMenuOpen(false)}
+                className={`flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                  isActive('/') 
+                    ? 'bg-indigo-600 text-white' 
+                    : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+                }`}
+              >
+                <Home className="h-5 w-5 mr-3" />
+                Home
+              </Link>
+              <Link
+                to="/profile"
+                onClick={() => setIsMobileMenuOpen(false)}
+                className={`flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                  isActive('/profile') 
+                    ? 'bg-indigo-600 text-white' 
+                    : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+                }`}
+              >
+                <User className="h-5 w-5 mr-3" />
+                Profile
+              </Link>
+              <button
+                onClick={() => {
+                  setIsMobileMenuOpen(false);
+                  handleSignOut();
+                }}
+                className="flex items-center w-full px-3 py-2 rounded-md text-sm font-medium text-gray-300 hover:bg-gray-700 hover:text-white transition-colors"
+              >
+                <LogOut className="h-5 w-5 mr-3" />
+                Sign Out
+              </button>
+            </div>
+          </div>
+        )}
       </nav>
 
       <main className="max-w-7xl mx-auto py-4 sm:py-6 px-4 sm:px-6 lg:px-8">

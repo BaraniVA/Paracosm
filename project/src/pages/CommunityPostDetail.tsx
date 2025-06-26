@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
+import { notifyUserInteraction } from '../lib/notifications';
 import { CommentThread } from '../components/CommentThread';
 import { VotingSystem } from '../components/VotingSystem';
 import { UserLink } from '../components/UserLink';
@@ -91,6 +92,19 @@ export function CommunityPostDetail() {
         ]);
 
       if (error) throw error;
+
+      // Notify post author if commenter is not the author
+      if (post && post.author.id !== user.id) {
+        await notifyUserInteraction({
+          targetUserId: post.author.id,
+          fromUserId: user.id,
+          fromUsername: user.user_metadata?.username || user.email?.split('@')[0] || 'Anonymous',
+          action: 'commented_on_post',
+          context: `${post.world.title}`,
+          actionUrl: `/world/${worldId}/community/${postId}`
+        });
+      }
+
       fetchPostData(); // Refresh comments
     } catch (error) {
       console.error('Error submitting comment:', error);
@@ -177,6 +191,8 @@ export function CommunityPostDetail() {
             targetId={post.id}
             currentVotes={post.upvotes}
             onVoteChange={handleVoteChange}
+            targetAuthorId={post.author.id}
+            worldName={post.world.title}
           />
         </div>
 

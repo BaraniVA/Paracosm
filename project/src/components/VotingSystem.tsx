@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { ArrowUp, ArrowDown } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
+import { notifyUserInteraction } from '../lib/notifications';
 
 interface VotingSystemProps {
   targetType: 'question' | 'community_post' | 'community_comment';
@@ -9,6 +10,8 @@ interface VotingSystemProps {
   currentVotes: number;
   onVoteChange: (newVoteCount: number) => void;
   className?: string;
+  targetAuthorId?: string; // Author of the post/comment for notifications
+  worldName?: string; // For notification context
 }
 
 export function VotingSystem({ 
@@ -16,19 +19,15 @@ export function VotingSystem({
   targetId, 
   currentVotes, 
   onVoteChange,
-  className = '' 
+  className = '',
+  targetAuthorId,
+  worldName
 }: VotingSystemProps) {
   const { user } = useAuth();
   const [userVote, setUserVote] = useState<'upvote' | 'downvote' | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  useEffect(() => {
-    if (user) {
-      checkUserVote();
-    }
-  }, [user, targetId]);
-
-  const checkUserVote = async () => {
+  const checkUserVote = useCallback(async () => {
     if (!user) return;
 
     try {
@@ -49,7 +48,13 @@ export function VotingSystem({
     } catch (error) {
       console.error('Error checking user vote:', error);
     }
-  };
+  }, [user, targetType, targetId]);
+
+  useEffect(() => {
+    if (user) {
+      checkUserVote();
+    }
+  }, [user, targetId, checkUserVote]);
 
   const handleVote = async (voteType: 'upvote' | 'downvote') => {
     if (!user || isLoading) return;
@@ -97,6 +102,18 @@ export function VotingSystem({
         }
 
         await updateTargetVoteCount(newVoteCount);
+        
+        // Send notification for upvotes (not downvotes) to non-self votes
+        if (voteType === 'upvote' && targetAuthorId && targetAuthorId !== user.id && userVote !== 'upvote') {
+          await notifyUserInteraction({
+            targetUserId: targetAuthorId,
+            fromUserId: user.id,
+            fromUsername: user.user_metadata?.username || user.email?.split('@')[0] || 'Anonymous',
+            action: 'upvoted_comment',
+            context: worldName || 'a world',
+            actionUrl: window.location.pathname
+          });
+        }
         
         setUserVote(voteType);
         onVoteChange(newVoteCount);
