@@ -8,6 +8,7 @@ import { CreateEditWorldRecordForm } from '../components/CreateEditWorldRecordFo
 import { TimelineView } from '../components/TimelineView';
 import { CreateEditTimelineEntryForm } from '../components/CreateEditTimelineEntryForm';
 import { UserLink } from '../components/UserLink';
+import { UserAvatar } from '../components/UserAvatar';
 
 interface World {
   id: string;
@@ -40,7 +41,7 @@ interface Question {
   upvotes: number;
   answer: string | null;
   created_at: string;
-  author: { id: string; username: string };
+  author: { id: string; username: string; profile_picture_url?: string };
 }
 
 interface ScrollItem {
@@ -48,7 +49,7 @@ interface ScrollItem {
   scroll_text: string;
   is_canon: boolean;
   created_at: string;
-  author: { id: string; username: string };
+  author: { id: string; username: string; profile_picture_url?: string };
 }
 
 interface Inhabitant {
@@ -58,6 +59,7 @@ interface Inhabitant {
     id: string; 
     username: string; 
     email: string; 
+    profile_picture_url?: string;
   };
   role: { 
     id: string;
@@ -196,7 +198,7 @@ export function WorldDashboard() {
         .from('questions')
         .select(`
           *,
-          author:users!author_id(id, username)
+          author:users!author_id(id, username, profile_picture_url)
         `)
         .eq('world_id', worldId)
         .order('created_at', { ascending: false });
@@ -207,7 +209,7 @@ export function WorldDashboard() {
         .from('scrolls')
         .select(`
           *,
-          author:users!author_id(id, username)
+          author:users!author_id(id, username, profile_picture_url)
         `)
         .eq('world_id', worldId)
         .order('created_at', { ascending: false });
@@ -218,7 +220,7 @@ export function WorldDashboard() {
         .from('inhabitants')
         .select(`
           *,
-          user:users!user_id(id, username, email),
+          user:users!user_id(id, username, email, profile_picture_url),
           role:roles!role_id(id, name, is_important)
         `)
         .eq('world_id', worldId)
@@ -1223,11 +1225,12 @@ export function WorldDashboard() {
                 {pendingScrolls.map((scroll) => (
                   <div key={scroll.id} className="bg-gray-800 rounded-lg p-4 border-l-4 border-orange-500">
                     <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-3">
-                      <div className="flex items-center space-x-3 min-w-0 flex-1">                        <div className="w-8 h-8 bg-orange-600 rounded-full flex items-center justify-center flex-shrink-0">
-                          <span className="text-white text-sm font-medium">
-                            {scroll.author.username[0].toUpperCase()}
-                          </span>
-                        </div>
+                      <div className="flex items-center space-x-3 min-w-0 flex-1">                        <UserAvatar 
+                          username={scroll.author.username}
+                          profilePictureUrl={scroll.author.profile_picture_url}
+                          size="md"
+                          className="ring-2 ring-orange-600"
+                        />
                         <div className="min-w-0">
                           <UserLink userId={scroll.author.id} username={scroll.author.username} />
                           <p className="text-gray-400 text-sm">
@@ -1272,11 +1275,12 @@ export function WorldDashboard() {
                 {canonScrolls.map((scroll) => (
                   <div key={scroll.id} className="bg-gray-800 rounded-lg p-4 border-l-4 border-green-500">
                     <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-3">
-                      <div className="flex items-center space-x-3 min-w-0 flex-1">                        <div className="w-8 h-8 bg-green-600 rounded-full flex items-center justify-center flex-shrink-0">
-                          <span className="text-white text-sm font-medium">
-                            {scroll.author.username[0].toUpperCase()}
-                          </span>
-                        </div>
+                      <div className="flex items-center space-x-3 min-w-0 flex-1">                        <UserAvatar 
+                          username={scroll.author.username}
+                          profilePictureUrl={scroll.author.profile_picture_url}
+                          size="md"
+                          className="ring-2 ring-green-600"
+                        />
                         <div className="min-w-0 flex-1">
                           <UserLink userId={scroll.author.id} username={scroll.author.username} />
                           <p className="text-gray-400 text-sm">
@@ -1324,11 +1328,12 @@ export function WorldDashboard() {
                 {unansweredQuestions.map((question) => (
                   <div key={question.id} className="bg-gray-800 rounded-lg p-4 border-l-4 border-blue-500">
                     <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-3">
-                      <div className="flex items-center space-x-3 min-w-0 flex-1">                        <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
-                          <span className="text-white text-sm font-medium">
-                            {question.author.username[0].toUpperCase()}
-                          </span>
-                        </div>
+                      <div className="flex items-center space-x-3 min-w-0 flex-1">                        <UserAvatar 
+                          username={question.author.username}
+                          profilePictureUrl={question.author.profile_picture_url}
+                          size="md"
+                          className="ring-2 ring-blue-600"
+                        />
                         <div className="min-w-0">
                           <UserLink userId={question.author.id} username={question.author.username} />
                           <p className="text-gray-400 text-sm">
@@ -1405,11 +1410,12 @@ export function WorldDashboard() {
                         <tr key={inhabitant.id} className="hover:bg-gray-700 transition-colors">
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="flex items-center">
-                              <div className="w-8 h-8 bg-indigo-600 rounded-full flex items-center justify-center mr-3">
-                                <span className="text-white text-sm font-medium">
-                                  {inhabitant.user.username[0].toUpperCase()}
-                                </span>
-                              </div>
+                              <UserAvatar 
+                                username={inhabitant.user.username}
+                                profilePictureUrl={inhabitant.user.profile_picture_url}
+                                size="md"
+                                className="mr-3"
+                              />
                               <div>
                                 <UserLink 
                                   userId={inhabitant.user.id} 

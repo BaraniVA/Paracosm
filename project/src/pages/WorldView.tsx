@@ -8,6 +8,7 @@ import { WorldRecordCard } from '../components/WorldRecordCard';
 import { WorldRecordModal } from '../components/WorldRecordModal';
 import { CreateEditWorldRecordForm } from '../components/CreateEditWorldRecordForm';
 import { TimelineView } from '../components/TimelineView';
+import { UserAvatar } from '../components/UserAvatar';
 import { CreateEditTimelineEntryForm } from '../components/CreateEditTimelineEntryForm';
 import { VotingSystem } from '../components/VotingSystem';
 import { WorldShareCard } from '../components/WorldShareCard';
@@ -43,7 +44,7 @@ interface Question {
   upvotes: number;
   answer: string | null;
   created_at: string;
-  author: { id: string; username: string };
+  author: { id: string; username: string; profile_picture_url?: string };
 }
 
 interface ScrollItem {
@@ -51,7 +52,7 @@ interface ScrollItem {
   scroll_text: string;
   is_canon: boolean;
   created_at: string;
-  author: { id: string; username: string };
+  author: { id: string; username: string; profile_picture_url?: string };
 }
 
 interface CommunityPost {
@@ -60,7 +61,7 @@ interface CommunityPost {
   content: string;
   upvotes: number;
   created_at: string;
-  author: { id: string; username: string };
+  author: { id: string; username: string; profile_picture_url?: string };
   comments_count: number;
 }
 
@@ -222,7 +223,7 @@ export function WorldView() {
         .from('questions')
         .select(`
           *,
-          author:users!author_id(id, username)
+          author:users!author_id(id, username, profile_picture_url)
         `)
         .eq('world_id', worldId)
         .order('created_at', { ascending: false });
@@ -233,7 +234,7 @@ export function WorldView() {
         .from('scrolls')
         .select(`
           *,
-          author:users!author_id(id, username)
+          author:users!author_id(id, username, profile_picture_url)
         `)
         .eq('world_id', worldId)
         .eq('is_canon', true)
@@ -245,7 +246,7 @@ export function WorldView() {
         .from('community_posts')
         .select(`
           *,
-          author:users!author_id(id, username)
+          author:users!author_id(id, username, profile_picture_url)
         `)
         .eq('world_id', worldId)
         .order('created_at', { ascending: false });
@@ -1054,11 +1055,12 @@ export function WorldView() {
                 <div key={post.id} className="bg-gray-800 rounded-lg p-4 sm:p-6 border border-gray-700 hover:border-gray-600 transition-colors">
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex items-center space-x-3 min-w-0 flex-1">
-                      <div className="w-10 h-10 bg-indigo-600 rounded-full flex items-center justify-center flex-shrink-0">
-                        <span className="text-white font-medium">
-                          {post.author.username[0].toUpperCase()}
-                        </span>
-                      </div>                      <div className="min-w-0">
+                      <UserAvatar 
+                        username={post.author.username}
+                        profilePictureUrl={post.author.profile_picture_url}
+                        size="lg"
+                      />
+                      <div className="min-w-0">
                         <UserLink userId={post.author.id} username={post.author.username} />
                         <p className="text-gray-400 text-sm">
                           {new Date(post.created_at).toLocaleDateString()}
@@ -1150,11 +1152,12 @@ export function WorldView() {
                 <div key={question.id} className="bg-gray-800 rounded-lg p-4 sm:p-6">
                   <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-4">
                     <div className="flex items-center space-x-3 min-w-0 flex-1">
-                      <div className="w-8 h-8 bg-indigo-600 rounded-full flex items-center justify-center flex-shrink-0">
-                        <span className="text-white text-sm font-medium">
-                          {question.author.username[0].toUpperCase()}
-                        </span>
-                      </div>                      <div className="min-w-0">
+                      <UserAvatar 
+                        username={question.author.username}
+                        profilePictureUrl={question.author.profile_picture_url}
+                        size="md"
+                      />
+                      <div className="min-w-0">
                         <UserLink userId={question.author.id} username={question.author.username} />
                         <p className="text-gray-400 text-sm">
                           {new Date(question.created_at).toLocaleDateString()}
@@ -1225,11 +1228,13 @@ export function WorldView() {
                 <div key={scroll.id} className="bg-gray-800 rounded-lg p-4 sm:p-6 border-l-4 border-green-500">
                   <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-4">
                     <div className="flex items-center space-x-3 min-w-0 flex-1">
-                      <div className="w-8 h-8 bg-green-600 rounded-full flex items-center justify-center flex-shrink-0">
-                        <span className="text-white text-sm font-medium">
-                          {scroll.author.username[0].toUpperCase()}
-                        </span>
-                      </div>                      <div className="min-w-0">
+                      <UserAvatar 
+                        username={scroll.author.username}
+                        profilePictureUrl={scroll.author.profile_picture_url}
+                        size="md"
+                        className="ring-2 ring-green-600"
+                      />
+                      <div className="min-w-0">
                         <UserLink userId={scroll.author.id} username={scroll.author.username} />
                         <p className="text-gray-400 text-sm">
                           {new Date(scroll.created_at).toLocaleDateString()}

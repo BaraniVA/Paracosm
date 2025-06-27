@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
 import { MessageCircle, CornerDownRight, Trash2, MoreHorizontal } from 'lucide-react';
 import { UserLink } from './UserLink';
+import { UserAvatar } from './UserAvatar';
 
 interface CommunityComment {
   id: string;
   comment_text: string;
   created_at: string;
   parent_comment_id: string | null;
-  author: { id: string; username: string };
+  author: { id: string; username: string; profile_picture_url?: string };
   replies?: CommunityComment[];
 }
 
@@ -93,11 +94,11 @@ export function CommentItem({
       
       <div className="bg-gray-700 rounded-lg p-4 mb-3">
         <div className="flex items-start space-x-3">
-          <div className="w-8 h-8 bg-gray-600 rounded-full flex items-center justify-center flex-shrink-0">
-            <span className="text-white text-sm font-medium">
-              {comment.author.username[0].toUpperCase()}
-            </span>
-          </div>
+          <UserAvatar 
+            username={comment.author.username}
+            profilePictureUrl={comment.author.profile_picture_url}
+            size="md"
+          />
           
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between mb-2">

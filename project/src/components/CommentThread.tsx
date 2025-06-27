@@ -7,7 +7,7 @@ interface CommunityComment {
   comment_text: string;
   created_at: string;
   parent_comment_id: string | null;
-  author: { username: string };
+  author: { username: string; profile_picture_url?: string };
   replies?: CommunityComment[];
 }
 
