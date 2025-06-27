@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Users, Crown, UserX, AlertTriangle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { UserLink } from './UserLink';
+import { UserAvatar } from './UserAvatar';
 
 interface Inhabitant {
   id: string;
@@ -10,6 +11,7 @@ interface Inhabitant {
     id: string;
     username: string;
     email: string;
+    profile_picture_url?: string;
   };
   role: {
     id: string;
@@ -39,7 +41,7 @@ export function InhabitantManagement({ worldId, isCreator, onInhabitantKicked }:
         .from('inhabitants')
         .select(`
           *,
-          user:users!user_id(id, username, email),
+          user:users!user_id(id, username, email, profile_picture_url),
           role:roles!role_id(id, name, is_important)
         `)
         .eq('world_id', worldId)
@@ -124,11 +126,11 @@ export function InhabitantManagement({ worldId, isCreator, onInhabitantKicked }:
               className="bg-gray-700 rounded-lg p-4 flex items-center justify-between"
             >
               <div className="flex items-center space-x-4">
-                <div className="w-10 h-10 bg-gray-600 rounded-full flex items-center justify-center">
-                  <span className="text-white font-medium">
-                    {inhabitant.user.username[0].toUpperCase()}
-                  </span>
-                </div>
+                <UserAvatar 
+                  username={inhabitant.user.username}
+                  profilePictureUrl={inhabitant.user.profile_picture_url}
+                  size="lg"
+                />
                 
                 <div>                  <div className="flex items-center space-x-2">
                     <UserLink userId={inhabitant.user.id} username={inhabitant.user.username} className="text-white font-medium" />

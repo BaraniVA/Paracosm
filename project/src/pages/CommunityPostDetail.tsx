@@ -6,6 +6,7 @@ import { notifyUserInteraction } from '../lib/notifications';
 import { CommentThread } from '../components/CommentThread';
 import { VotingSystem } from '../components/VotingSystem';
 import { UserLink } from '../components/UserLink';
+import { UserAvatar } from '../components/UserAvatar';
 import { ArrowLeft, MessageCircle, Calendar, User } from 'lucide-react';
 
 interface CommunityPost {
@@ -14,7 +15,7 @@ interface CommunityPost {
   content: string;
   upvotes: number;
   created_at: string;
-  author: { id: string; username: string };
+  author: { id: string; username: string; profile_picture_url?: string };
   world: { title: string; creator_id: string };
 }
 
@@ -23,7 +24,7 @@ interface CommunityComment {
   comment_text: string;
   created_at: string;
   parent_comment_id: string | null;
-  author: { id: string; username: string };
+  author: { id: string; username: string; profile_picture_url?: string };
   replies?: CommunityComment[];
 }
 
@@ -47,7 +48,7 @@ export function CommunityPostDetail() {
         .from('community_posts')
         .select(`
           *,
-          author:users!author_id(id, username),
+          author:users!author_id(id, username, profile_picture_url),
           world:worlds!world_id(title, creator_id)
         `)
         .eq('id', postId)
@@ -61,7 +62,7 @@ export function CommunityPostDetail() {
         .from('community_comments')
         .select(`
           *,
-          author:users!author_id(id, username)
+          author:users!author_id(id, username, profile_picture_url)
         `)
         .eq('post_id', postId)
         .order('created_at', { ascending: true });
@@ -173,11 +174,14 @@ export function CommunityPostDetail() {
 
       {/* Post Content */}
       <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-        <div className="flex items-start justify-between mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between mb-6 space-y-4 sm:space-y-0">
           <div className="flex items-center space-x-4">
-            <div className="w-12 h-12 bg-indigo-600 rounded-full flex items-center justify-center">
-              <User className="h-6 w-6 text-white" />
-            </div>            <div>
+            <UserAvatar 
+              username={post.author.username}
+              profilePictureUrl={post.author.profile_picture_url}
+              size="xl"
+            />
+            <div>
               <UserLink userId={post.author.id} username={post.author.username} className="text-white font-semibold" />
               <div className="flex items-center space-x-2 text-gray-400 text-sm">
                 <Calendar className="h-4 w-4" />
@@ -186,14 +190,17 @@ export function CommunityPostDetail() {
                 <span>{new Date(post.created_at).toLocaleTimeString()}</span>
               </div>
             </div>
-          </div>          <VotingSystem
-            targetType="community_post"
-            targetId={post.id}
-            currentVotes={post.upvotes}
-            onVoteChange={handleVoteChange}
-            targetAuthorId={post.author.id}
-            worldName={post.world.title}
-          />
+          </div>          
+          <div className="flex justify-start sm:justify-end">
+            <VotingSystem
+              targetType="community_post"
+              targetId={post.id}
+              currentVotes={post.upvotes}
+              onVoteChange={handleVoteChange}
+              targetAuthorId={post.author.id}
+              worldName={post.world.title}
+            />
+          </div>
         </div>
 
         <h1 className="text-2xl font-bold text-white mb-4">{post.title}</h1>
