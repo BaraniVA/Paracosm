@@ -2,20 +2,30 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
-import { Globe, Users, Scroll, GitBranch, ArrowRight, CheckCircle, Star, Zap, Shield, Heart, Award, User, Compass } from 'lucide-react';
+import { Globe, Users, Scroll, GitBranch, ArrowRight, CheckCircle, Star, Zap, Shield, Heart, Award, User, Compass, MessageSquare, BookOpen } from 'lucide-react';
 import { UserLink } from '../components/UserLink';
 
 interface World {
   id: string;
   title: string;
   description: string;
-  created_at: string;
-  creator: {
+  created_at: string;  creator: {
     id: string;
     username: string;
   };
+  parent_world?: {
+    id: string;
+    title: string;
+    creator: {
+      id: string;
+      username: string;
+    };
+  };
   inhabitants_count: number;
   canon_scrolls_count: number;
+  questions_count: number;
+  community_posts_count: number;
+  activity_score: number;
 }
 
 interface Testimonial {
@@ -49,24 +59,24 @@ export function Landing() {
 
   const fetchData = async () => {
     try {
-      // Fetch featured worlds
+      // Fetch all worlds with creator info
       const { data: worldsData, error: worldsError } = await supabase
         .from('worlds')
         .select(`
           *,
           creator:users!creator_id(id, username)
-        `)
-        .order('created_at', { ascending: false })
-        .limit(6);
+        `);
 
       if (worldsError) throw worldsError;
 
-      // Get counts for each world
+      // Get counts for each world and parent world info
       const worldsWithCounts = await Promise.all(
         (worldsData || []).map(async (world) => {
           const [
             { count: inhabitantCount },
-            { count: canonScrollCount }
+            { count: canonScrollCount },
+            { count: questionsCount },
+            { count: communityPostsCount }
           ] = await Promise.all([
             supabase
               .from('inhabitants')
@@ -76,18 +86,61 @@ export function Landing() {
               .from('scrolls')
               .select('*', { count: 'exact', head: true })
               .eq('world_id', world.id)
-              .eq('is_canon', true)
+              .eq('is_canon', true),
+            supabase
+              .from('questions')
+              .select('*', { count: 'exact', head: true })
+              .eq('world_id', world.id),
+            supabase
+              .from('community_posts')
+              .select('*', { count: 'exact', head: true })
+              .eq('world_id', world.id)
           ]);
+
+          // Fetch parent world info if this is a fork
+          let parent_world = null;
+          if (world.origin_world_id) {
+            const { data: parentWorldData } = await supabase
+              .from('worlds')
+              .select(`
+                id,
+                title,
+                creator:users!creator_id(id, username)
+              `)
+              .eq('id', world.origin_world_id)
+              .single();
+            
+            parent_world = parentWorldData;
+          }
+
+          // Calculate activity score
+          const inhabitants = inhabitantCount || 0;
+          const canonScrolls = canonScrollCount || 0;
+          const questions = questionsCount || 0;
+          const communityPosts = communityPostsCount || 0;
+          
+          // Weight different activities differently
+          const activityScore = 
+            inhabitants * 2 + 
+            canonScrolls * 3 + 
+            questions * 1 + 
+            communityPosts * 2;
 
           return { 
             ...world, 
-            inhabitants_count: inhabitantCount || 0,
-            canon_scrolls_count: canonScrollCount || 0
+            parent_world,
+            inhabitants_count: inhabitants,
+            canon_scrolls_count: canonScrolls,
+            questions_count: questions,
+            community_posts_count: communityPosts,
+            activity_score: activityScore
           };
         })
       );
 
-      setFeaturedWorlds(worldsWithCounts);
+      // Sort by activity score (highest first) and take top 6
+      const sortedWorlds = worldsWithCounts.sort((a, b) => b.activity_score - a.activity_score);
+      setFeaturedWorlds(sortedWorlds.slice(0, 6));
 
       // Fetch platform stats
       const [
@@ -110,6 +163,8 @@ export function Landing() {
       });
     } catch (error) {
       console.error('Error fetching data:', error);
+      // Set empty array so the page still renders
+      setFeaturedWorlds([]);
     } finally {
       setLoading(false);
     }
@@ -213,6 +268,11 @@ export function Landing() {
       action: "Create World"
     }
   ];
+
+  const getActivityScore = (world: World) => {
+    return world.community_posts_count + world.questions_count + world.canon_scrolls_count;
+  };
+  
   return (
     <>
       {/* Custom Bolt.new Badge Styles */}
@@ -417,9 +477,9 @@ export function Landing() {
       {/* Featured Worlds */}
       <section className="py-16">
         <div className="text-center mb-12">
-          <h2 className="text-4xl font-bold text-white mb-4">Discover Amazing Worlds</h2>
+          <h2 className="text-4xl font-bold text-white mb-4">Most Active Worlds</h2>
           <p className="text-xl text-gray-300 max-w-3xl mx-auto mb-6">
-            Explore worlds created by our community and find your next adventure
+            Explore thriving worlds with the most community engagement and activity
           </p>
           <Link
             to="/explore"
@@ -466,6 +526,25 @@ export function Landing() {
                     <div className="flex items-center space-x-1">
                       <Scroll className="h-3 w-3" />
                       <span>{world.canon_scrolls_count}</span>
+                    </div>
+                    <div className="flex items-center space-x-1">
+                      <MessageSquare className="h-3 w-3" />
+                      <span>{world.community_posts_count}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Activity Indicator */}
+                <div className="mt-4 pt-4 border-t border-gray-700 flex items-center justify-between">
+                  <div className="flex items-center space-x-1 text-gray-400 text-xs">
+                    <BookOpen className="h-3 w-3" />
+                    <span>{new Date(world.created_at).toLocaleDateString()}</span>
+                  </div>
+                  
+                  <div className="flex items-center space-x-2">
+                    <div className="bg-indigo-600/20 text-indigo-400 px-2 py-1 rounded-full text-xs flex items-center">
+                      <Zap className="h-3 w-3 mr-1" />
+                      <span>High Activity</span>
                     </div>
                   </div>
                 </div>
