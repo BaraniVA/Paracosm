@@ -3,7 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 import { notifyWorldOwner } from '../lib/notifications';
-import { ArrowUp, MessageSquare, Scroll, GitBranch, Settings, Users, Send, Plus, X, MessageCircle, BookOpen, ChevronDown, ChevronRight, Share } from 'lucide-react';
+import { ArrowUp, MessageSquare, Scroll, GitBranch, Settings, Users, Send, Plus, X, MessageCircle, BookOpen, ChevronDown, ChevronRight, Share, Map, Image, Clipboard } from 'lucide-react';
 import { WorldRecordCard } from '../components/WorldRecordCard';
 import { WorldRecordModal } from '../components/WorldRecordModal';
 import { CreateEditWorldRecordForm } from '../components/CreateEditWorldRecordForm';
@@ -13,6 +13,9 @@ import { CreateEditTimelineEntryForm } from '../components/CreateEditTimelineEnt
 import { VotingSystem } from '../components/VotingSystem';
 import { WorldShareCard } from '../components/WorldShareCard';
 import { UserLink } from '../components/UserLink';
+import { WorldMap } from './WorldMap';
+import { WorldGallery } from './WorldGallery';
+import { WorldWorkboard } from './WorldWorkBoard';
 
 interface World {
   id: string;
@@ -104,6 +107,7 @@ export function WorldView() {
   const [newQuestion, setNewQuestion] = useState('');
   const [newScroll, setNewScroll] = useState('');
   const [newPost, setNewPost] = useState({ title: '', content: '' });
+  const [mainTab, setMainTab] = useState('worldview');
   const [activeTab, setActiveTab] = useState('overview');
   const [loading, setLoading] = useState(true);  const [showForkDialog, setShowForkDialog] = useState(false);
   const [showShareCard, setShowShareCard] = useState(false);
@@ -730,7 +734,35 @@ export function WorldView() {
 
   return (
     <div className="max-w-6xl mx-auto space-y-6 px-4">
-      {/* World Header */}
+      {/* Main Navigation Tabs */}
+      <div className="border-b border-gray-700 overflow-x-auto">
+        <nav className="flex space-x-4 sm:space-x-8 min-w-max px-4 sm:px-0">
+          {[
+            { id: 'worldview', label: 'World View' },
+            { id: 'map', label: 'World Map', icon: Map },
+            { id: 'gallery', label: 'World Gallery', icon: Image },
+            { id: 'workboard', label: 'World board', icon: Clipboard },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setMainTab(tab.id)}
+              className={`flex items-center px-1 py-3 font-medium text-sm border-b-2 transition-colors whitespace-nowrap ${
+                mainTab === tab.id
+                  ? 'border-indigo-500 text-indigo-400'
+                  : 'border-transparent text-gray-400 hover:text-gray-300'
+              }`}
+            >
+              {tab.icon && <tab.icon className="h-4 w-4 mr-2" />}
+              {tab.label}
+            </button>
+          ))}
+        </nav>
+      </div>
+
+      {/* Main Tab Content */}
+      {mainTab === 'worldview' && (
+        <div className="space-y-6">
+          {/* World Header */}
       <div className=" rounded-lg p-4 sm:p-6">
         <div className="flex flex-col lg:flex-row lg:justify-between lg:items-start gap-4 mb-6">
           <div className="flex-1 min-w-0">
@@ -923,6 +955,7 @@ export function WorldView() {
                   : 'border-transparent text-gray-400 hover:text-gray-300'
               }`}
             >
+              {tab.icon && <tab.icon className="h-4 w-4 mr-2" />}
               {tab.label}
               {tab.count !== undefined && (
                 <span className="ml-2 px-2 py-0.5 bg-gray-700 text-gray-300 text-xs rounded-full">
@@ -1320,6 +1353,27 @@ export function WorldView() {
           </div>
         )}
       </div>
+        </div>
+      )}
+
+      {/* Other Main Tabs */}
+      {mainTab === 'map' && (
+        <div>
+          <WorldMap worldId={worldId!} isCreator={isCreator} />
+        </div>
+      )}
+
+      {mainTab === 'gallery' && (
+        <div>
+          <WorldGallery worldId={worldId!} isCreator={isCreator} />
+        </div>
+      )}
+
+      {mainTab === 'workboard' && (
+        <div>
+          <WorldWorkboard worldId={worldId!} isCreator={isCreator} />
+        </div>
+      )}
 
       {/* Modals and Forms */}
       {selectedRecord && (
@@ -1345,7 +1399,9 @@ export function WorldView() {
             setEditingRecord(null);
           }}
         />
-      )}      {showTimelineForm && (
+      )}
+
+      {showTimelineForm && (
         <CreateEditTimelineEntryForm
           worldId={worldId!}
           initialData={editingTimelineEntry || undefined}
