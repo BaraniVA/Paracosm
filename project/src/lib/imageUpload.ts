@@ -11,7 +11,7 @@ const IMGBB_URL = 'https://api.imgbb.com/1/upload';
 
 // File size limits (in bytes)
 export const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
-export const GALLERY_IMAGE_LIMIT = 10;
+export const GALLERY_IMAGE_LIMIT = 5;
 
 // Supported file types
 export const SUPPORTED_FILE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
