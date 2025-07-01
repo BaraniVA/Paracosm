@@ -3,12 +3,15 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 import { notifyUserInteraction } from '../lib/notifications';
-import { Users, MessageSquare, Scroll, GitBranch, Settings, Check, X, Trash2, ArrowUp, Edit, Save, Plus, BookOpen, UserX } from 'lucide-react';
+import { Users, MessageSquare, Scroll, GitBranch, Settings, Check, X, Trash2, ArrowUp, Edit, Save, Plus, BookOpen, UserX, Map, Image, Clipboard } from 'lucide-react';
 import { CreateEditWorldRecordForm } from '../components/CreateEditWorldRecordForm';
 import { TimelineView } from '../components/TimelineView';
 import { CreateEditTimelineEntryForm } from '../components/CreateEditTimelineEntryForm';
 import { UserLink } from '../components/UserLink';
 import { UserAvatar } from '../components/UserAvatar';
+import { WorldMap } from './WorldMap';
+import { WorldGallery } from './WorldGallery';
+import { WorldWorkboard } from './WorldWorkBoard';
 
 interface World {
   id: string;
@@ -96,6 +99,7 @@ export function WorldDashboard() {
   const { worldId } = useParams<{ worldId: string }>();
   const { user } = useAuth();
   const navigate = useNavigate();
+  const [mainTab, setMainTab] = useState('worldview');
   const [activeTab, setActiveTab] = useState('pending');
   const [world, setWorld] = useState<World | null>(null);
   const [roles, setRoles] = useState<Role[]>([]);
@@ -193,7 +197,7 @@ export function WorldDashboard() {
         id: role.id,
         name: role.name,
         description: role.description
-      })));      // Fetch questions
+      })));      // Fetch questions (limited to most recent 50 for performance)
       const { data: questionsData, error: questionsError } = await supabase
         .from('questions')
         .select(`
@@ -201,10 +205,11 @@ export function WorldDashboard() {
           author:users!author_id(id, username, profile_picture_url)
         `)
         .eq('world_id', worldId)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(50);
 
       if (questionsError) throw questionsError;
-      setQuestions(questionsData || []);      // Fetch ALL scrolls (both pending and canon) for the dashboard
+      setQuestions(questionsData || []);      // Fetch ALL scrolls (both pending and canon) for the dashboard (limited to most recent 100 for performance)
       const { data: scrollsData, error: scrollsError } = await supabase
         .from('scrolls')
         .select(`
@@ -212,7 +217,8 @@ export function WorldDashboard() {
           author:users!author_id(id, username, profile_picture_url)
         `)
         .eq('world_id', worldId)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(100);
 
       if (scrollsError) throw scrollsError;
       setAllScrolls(scrollsData || []);      // Fetch inhabitants
@@ -229,22 +235,24 @@ export function WorldDashboard() {
       if (inhabitantsError) throw inhabitantsError;
       setInhabitants(inhabitantsData || []);
 
-      // Fetch world records
+      // Fetch world records (limited to most recent 50 for performance)
       const { data: recordsData, error: recordsError } = await supabase
         .from('world_records')
         .select('*')
         .eq('world_id', worldId)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(50);
 
       if (recordsError) throw recordsError;
       setWorldRecords(recordsData || []);
 
-      // Fetch timeline entries
+      // Fetch timeline entries (limited to most recent 100 for performance)
       const { data: timelineData, error: timelineError } = await supabase
         .from('timeline_entries')
         .select('*')
         .eq('world_id', worldId)
-        .order('year', { ascending: true });
+        .order('year', { ascending: true })
+        .limit(100);
 
       if (timelineError) throw timelineError;
       setTimelineEntries(timelineData || []);
@@ -752,7 +760,36 @@ export function WorldDashboard() {
   const pendingScrolls = allScrolls.filter(s => !s.is_canon);
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6 px-4">      {/* Header */}
+    <div className="max-w-6xl mx-auto space-y-6 px-4">
+      {/* Main Navigation Tabs */}
+      <div className="border-b border-gray-700 overflow-x-auto">
+        <nav className="flex space-x-4 sm:space-x-8 min-w-max px-4 sm:px-0">
+          {[
+            { id: 'worldview', label: 'World View' },
+            { id: 'map', label: 'World Map', icon: Map },
+            { id: 'gallery', label: 'Gallery', icon: Image },
+            { id: 'workboard', label: 'Updates', icon: Clipboard },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setMainTab(tab.id)}
+              className={`flex items-center px-1 py-3 font-medium text-sm border-b-2 transition-colors whitespace-nowrap ${
+                mainTab === tab.id
+                  ? 'border-indigo-500 text-indigo-400'
+                  : 'border-transparent text-gray-400 hover:text-gray-300'
+              }`}
+            >
+              {tab.icon && <tab.icon className="h-4 w-4 mr-2" />}
+              {tab.label}
+            </button>
+          ))}
+        </nav>
+      </div>
+
+      {/* Main Tab Content */}
+      {mainTab === 'worldview' && (
+        <div className="space-y-6">
+          {/* Header */}
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div className="flex-1 min-w-0">
           {/* Parent World Reference */}
@@ -1195,8 +1232,9 @@ export function WorldDashboard() {
                   : 'border-transparent text-gray-400 hover:text-gray-300'
               }`}
             >
+              {tab.icon && <tab.icon className="h-4 w-4 mr-2" />}
               {tab.label}
-              {tab.count > 0 && (
+              {tab.count !== undefined && tab.count > 0 && (
                 <span className={`ml-2 px-2 py-0.5 text-xs rounded-full ${
                   tab.color === 'orange' ? 'bg-orange-600 text-white' :
                   tab.color === 'green' ? 'bg-green-600 text-white' :
@@ -1467,6 +1505,27 @@ export function WorldDashboard() {
           </div>
         )}
       </div>
+        </div>
+      )}
+
+      {/* Other Main Tabs */}
+      {mainTab === 'map' && (
+        <div>
+          <WorldMap worldId={worldId!} isCreator={true} />
+        </div>
+      )}
+
+      {mainTab === 'gallery' && (
+        <div>
+          <WorldGallery worldId={worldId!} isCreator={true} />
+        </div>
+      )}
+
+      {mainTab === 'workboard' && (
+        <div>
+          <WorldWorkboard worldId={worldId!} isCreator={true} />
+        </div>
+      )}
 
       {/* Forms */}
       {showRecordForm && (
