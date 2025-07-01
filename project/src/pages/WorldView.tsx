@@ -344,14 +344,14 @@ export function WorldView() {
   useEffect(() => {
     if (!worldId) return;
     
-    // Set up smart polling every 30 seconds for real-time updates
+    // Set up smart polling every 60 seconds for real-time updates (reduced from 30s)
     const interval = setInterval(async () => {
       if (activeTab === 'overview') {
         await loadTabData('overview');
       } else if (activeTab === 'community') {
         await loadTabData('community');
       }
-    }, 30000); // 30 seconds
+    }, 60000); // Increased from 30 seconds to 60 seconds
     
     setPollingInterval(interval);
     

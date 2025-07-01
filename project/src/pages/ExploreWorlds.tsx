@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
@@ -48,74 +48,138 @@ export function ExploreWorlds() {
 
   const fetchWorlds = async () => {
     try {
-      // Fetch all worlds with creator info (limited to most recent 50 for performance)
-      const { data: worldsData, error: worldsError } = await supabase
-        .from('worlds')
-        .select(`
-          *,
-          creator:users!creator_id(id, username)
-        `)
-        .order('created_at', { ascending: false })
-        .limit(50);
+      // Use the optimized database function if available, otherwise fallback to current method
+      let worldsData;
+      
+      try {
+        // Try to use the optimized function first
+        const { data, error } = await supabase
+          .rpc('get_worlds_with_stats', {
+            limit_count: 50,
+            offset_count: 0,
+            search_term: null
+          });
+        
+        if (!error && data) {
+          worldsData = data.map((world: any) => ({
+            ...world,
+            creator: {
+              id: world.creator_id,
+              username: world.creator_username
+            }
+          }));
+        }
+      } catch (rpcError) {
+        console.log('RPC function not available, falling back to direct queries');
+        // Fallback to original method
+        const { data, error: worldsError } = await supabase
+          .from('worlds')
+          .select(`
+            *,
+            creator:users!creator_id(id, username)
+          `)
+          .order('created_at', { ascending: false })
+          .limit(50);
 
-      if (worldsError) throw worldsError;
+        if (worldsError) throw worldsError;
+        worldsData = data;
+      }
 
-      // Get counts for each world and parent world info
-      const worldsWithCounts = await Promise.all(
-        (worldsData || []).map(async (world) => {
-          const [
-            { count: inhabitantCount },
-            { count: canonScrollCount },
-            { count: questionsCount },
-            { count: communityPostsCount }
-          ] = await Promise.all([
-            supabase
-              .from('inhabitants')
-              .select('*', { count: 'exact', head: true })
-              .eq('world_id', world.id),
-            supabase
-              .from('scrolls')
-              .select('*', { count: 'exact', head: true })
-              .eq('world_id', world.id)
-              .eq('is_canon', true),
-            supabase
-              .from('questions')
-              .select('*', { count: 'exact', head: true })
-              .eq('world_id', world.id),
-            supabase
-              .from('community_posts')
-              .select('*', { count: 'exact', head: true })
-              .eq('world_id', world.id)
-          ]);
+      if (!worldsData) {
+        setWorlds([]);
+        return;
+      }
 
-          // Fetch parent world info if this is a fork
-          let parent_world = null;
-          if (world.origin_world_id) {
-            const { data: parentWorldData } = await supabase
-              .from('worlds')
-              .select(`
-                id,
-                title,
-                creator:users!creator_id(id, username)
-              `)
-              .eq('id', world.origin_world_id)
-              .single();
-            
-            parent_world = parentWorldData;
-          }
+      // If we have computed columns, use them directly
+      if (worldsData[0] && 'inhabitants_count' in worldsData[0]) {
+        // Data already has computed counts
+        const worldsWithCounts = await Promise.all(
+          worldsData.map(async (world: any) => {
+            // Only fetch parent world info if needed
+            let parent_world = null;
+            if (world.origin_world_id) {
+              const { data: parentWorldData } = await supabase
+                .from('worlds')
+                .select(`
+                  id,
+                  title,
+                  creator:users!creator_id(id, username)
+                `)
+                .eq('id', world.origin_world_id)
+                .single();
+              
+              parent_world = parentWorldData;
+            }
 
-          return { 
-            ...world, 
-            parent_world,
-            inhabitants_count: inhabitantCount || 0,
-            canon_scrolls_count: canonScrollCount || 0,
-            questions_count: questionsCount || 0,
-            community_posts_count: communityPostsCount || 0
-          };
-        })
-      );
+            return { 
+              ...world, 
+              parent_world,
+              // Use computed columns if available, otherwise default to 0
+              inhabitants_count: world.inhabitants_count || 0,
+              canon_scrolls_count: world.canon_scrolls_count || 0,
+              questions_count: world.questions_count || 0,
+              community_posts_count: world.community_posts_count || 0
+            };
+          })
+        );
+        setWorlds(worldsWithCounts);
+      } else {
+        // Fallback to individual count queries (original method)
+        const worldsWithCounts = await Promise.all(
+          worldsData.map(async (world: any) => {
+            const [
+              { count: inhabitantCount },
+              { count: canonScrollCount },
+              { count: questionsCount },
+              { count: communityPostsCount }
+            ] = await Promise.all([
+              supabase
+                .from('inhabitants')
+                .select('*', { count: 'exact', head: true })
+                .eq('world_id', world.id),
+              supabase
+                .from('scrolls')
+                .select('*', { count: 'exact', head: true })
+                .eq('world_id', world.id)
+                .eq('is_canon', true),
+              supabase
+                .from('questions')
+                .select('*', { count: 'exact', head: true })
+                .eq('world_id', world.id),
+              supabase
+                .from('community_posts')
+                .select('*', { count: 'exact', head: true })
+                .eq('world_id', world.id)
+            ]);
 
-      setWorlds(worldsWithCounts);
+            // Fetch parent world info if this is a fork
+            let parent_world = null;
+            if (world.origin_world_id) {
+              const { data: parentWorldData } = await supabase
+                .from('worlds')
+                .select(`
+                  id,
+                  title,
+                  creator:users!creator_id(id, username)
+                `)
+                .eq('id', world.origin_world_id)
+                .single();
+              
+              parent_world = parentWorldData;
+            }
+
+            return { 
+              ...world, 
+              parent_world,
+              inhabitants_count: inhabitantCount || 0,
+              canon_scrolls_count: canonScrollCount || 0,
+              questions_count: questionsCount || 0,
+              community_posts_count: communityPostsCount || 0
+            };
+          })
+        );
+        setWorlds(worldsWithCounts);
+      }
     } catch (error) {
       console.error('Error fetching worlds:', error);
       // Set empty array so the page still renders
