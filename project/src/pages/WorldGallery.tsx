@@ -1,7 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
-import { Image, Plus, Edit, Trash2, Eye, EyeOff, Upload, X } from 'lucide-react';
+import { Image, Plus, Edit, Trash2, EyeOff, X, AlertTriangle, Info } from 'lucide-react';
+import { ImageUploadSection } from '../components/FileUpload';
+import { GALLERY_IMAGE_LIMIT, deleteImage, detectImageService } from '../lib/imageUpload';
 
 interface GalleryImage {
   id: string;
@@ -41,17 +43,14 @@ export function WorldGallery({ worldId, isCreator }: WorldGalleryProps) {
     'map', 'concept', 'architecture', 'landscape', 'other'
   ];
 
-  useEffect(() => {
-    fetchImages();
-  }, [worldId]);
-
-  const fetchImages = async () => {
+  const fetchImages = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from('world_gallery')
         .select('*')
         .eq('world_id', worldId)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(100); // Limit to most recent 100 images for performance
 
       if (error) throw error;
       setImages(data || []);
@@ -60,11 +59,26 @@ export function WorldGallery({ worldId, isCreator }: WorldGalleryProps) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [worldId]);
+
+  useEffect(() => {
+    fetchImages();
+  }, [fetchImages]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
+
+    // Check gallery limit for new images
+    if (!editingImage && images.length >= GALLERY_IMAGE_LIMIT) {
+      alert(`You can only have ${GALLERY_IMAGE_LIMIT} images in your gallery. Please delete some images first.`);
+      return;
+    }
+
+    if (!formData.image_url) {
+      alert('Please add an image before submitting.');
+      return;
+    }
 
     try {
       const imageData = {
@@ -98,6 +112,7 @@ export function WorldGallery({ worldId, isCreator }: WorldGalleryProps) {
       fetchImages();
     } catch (error) {
       console.error('Error saving image:', error);
+      alert('Failed to save image. Please try again.');
     }
   };
 
@@ -114,18 +129,45 @@ export function WorldGallery({ worldId, isCreator }: WorldGalleryProps) {
   };
 
   const handleDelete = async (imageId: string) => {
-    if (!confirm('Are you sure you want to delete this image?')) return;
+    const imageToDelete = images.find(img => img.id === imageId);
+    if (!imageToDelete) return;
+
+    const imageService = detectImageService(imageToDelete.image_url);
+    
+    let confirmMessage = 'Are you sure you want to delete this image?';
+    if (imageService === 'imgbb') {
+      confirmMessage += '\n\nNote: This will remove the image from your gallery, but ImgBB does not support deletion so the image will remain hosted on their servers.';
+    }
+
+    if (!confirm(confirmMessage)) return;
 
     try {
+      // Delete from database first
       const { error } = await supabase
         .from('world_gallery')
         .delete()
         .eq('id', imageId);
 
       if (error) throw error;
+
+      // Try to delete from hosting service
+      if (imageService !== 'imgbb') {
+        const deleteResult = await deleteImage(imageToDelete.image_url);
+        if (!deleteResult.success) {
+          console.warn('Failed to delete from hosting service:', deleteResult.error);
+          // Still continue - database deletion was successful
+        }
+      }
+
       fetchImages();
+      
+      // Show info message for ImgBB
+      if (imageService === 'imgbb') {
+        alert('Image removed from gallery. Note: The image remains hosted on ImgBB servers.');
+      }
     } catch (error) {
       console.error('Error deleting image:', error);
+      alert('Failed to delete image. Please try again.');
     }
   };
 
@@ -181,14 +223,42 @@ export function WorldGallery({ worldId, isCreator }: WorldGalleryProps) {
                 });
                 setShowForm(true);
               }}
-              className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+              disabled={images.length >= GALLERY_IMAGE_LIMIT}
+              className={`flex items-center px-4 py-2 rounded-lg transition-colors ${
+                images.length >= GALLERY_IMAGE_LIMIT
+                  ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                  : 'bg-indigo-600 text-white hover:bg-indigo-700'
+              }`}
             >
               <Plus className="h-4 w-4 mr-2" />
-              Add Image
+              Add Image {images.length >= GALLERY_IMAGE_LIMIT ? `(${GALLERY_IMAGE_LIMIT} max)` : `(${images.length}/${GALLERY_IMAGE_LIMIT})`}
             </button>
           )}
         </div>
       </div>
+
+      {/* Gallery Limit Warning */}
+      {isCreator && images.length >= GALLERY_IMAGE_LIMIT - 2 && (
+        <div className="bg-yellow-900/20 border border-yellow-700 rounded-lg p-4">
+          <div className="flex items-center space-x-2">
+            <AlertTriangle className="h-5 w-5 text-yellow-400 flex-shrink-0" />
+            <div>
+              <p className="text-yellow-300 font-medium">
+                {images.length >= GALLERY_IMAGE_LIMIT 
+                  ? 'Gallery limit reached' 
+                  : `Approaching gallery limit (${images.length}/${GALLERY_IMAGE_LIMIT})`
+                }
+              </p>
+              <p className="text-yellow-400 text-sm">
+                {images.length >= GALLERY_IMAGE_LIMIT
+                  ? 'Delete some images to add new ones'
+                  : 'Consider removing old images before adding new ones'
+                }
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Gallery Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
@@ -291,20 +361,12 @@ export function WorldGallery({ worldId, isCreator }: WorldGalleryProps) {
                 />
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">Image URL</label>
-                <input
-                  type="url"
-                  value={formData.image_url}
-                  onChange={(e) => setFormData(prev => ({ ...prev, image_url: e.target.value }))}
-                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white"
-                  placeholder="https://example.com/image.jpg"
-                  required
-                />
-                <p className="text-gray-400 text-xs mt-1">
-                  Use image URLs from Pexels, Unsplash, or other image hosting services
-                </p>
-              </div>
+              <ImageUploadSection
+                onImageSelect={(url) => setFormData(prev => ({ ...prev, image_url: url }))}
+                currentUrl={formData.image_url}
+                title="Image"
+                description="Upload from your device or enter an image URL"
+              />
 
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-1">Category</label>
@@ -358,7 +420,12 @@ export function WorldGallery({ worldId, isCreator }: WorldGalleryProps) {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+                  disabled={!formData.image_url}
+                  className={`px-4 py-2 rounded-lg transition-colors ${
+                    formData.image_url
+                      ? 'bg-indigo-600 text-white hover:bg-indigo-700'
+                      : 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                  }`}
                 >
                   {editingImage ? 'Update' : 'Add'} Image
                 </button>

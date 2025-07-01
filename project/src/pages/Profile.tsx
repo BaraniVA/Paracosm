@@ -154,7 +154,7 @@ export function Profile() {
       if (inhabitantsError) throw inhabitantsError;
       setJoinedWorlds((inhabitantsData || []) as unknown as Inhabitant[]);
       
-      // Fetch user's scrolls
+      // Fetch user's scrolls (limited to most recent 50 for performance)
       const { data: scrollsData, error: scrollsError } = await supabase
         .from('scrolls')
         .select(`
@@ -162,12 +162,13 @@ export function Profile() {
           world:worlds!world_id(title)
         `)
         .eq('author_id', targetUserId)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(50);
 
       if (scrollsError) throw scrollsError;
       setUserScrolls(scrollsData || []);
 
-      // Fetch user's questions
+      // Fetch user's questions (limited to most recent 50 for performance)
       const { data: questionsData, error: questionsError } = await supabase
         .from('questions')
         .select(`
@@ -175,7 +176,8 @@ export function Profile() {
           world:worlds!world_id(title)
         `)
         .eq('author_id', targetUserId)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(50);
 
       if (questionsError) throw questionsError;
       setUserQuestions(questionsData || []);

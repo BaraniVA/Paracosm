@@ -1,6 +1,44 @@
 import React, { useState, useRef } from 'react';
 import { Camera, Upload, X } from 'lucide-react';
 
+// Image compression function to reduce database storage
+const compressImage = (file: File): Promise<string> => {
+  return new Promise((resolve) => {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    const img = new Image();
+    
+    img.onload = () => {
+      // Resize to max 150x150 for profile pictures
+      const maxSize = 150;
+      let { width, height } = img;
+      
+      if (width > height) {
+        if (width > maxSize) {
+          height = (height * maxSize) / width;
+          width = maxSize;
+        }
+      } else {
+        if (height > maxSize) {
+          width = (width * maxSize) / height;
+          height = maxSize;
+        }
+      }
+      
+      canvas.width = width;
+      canvas.height = height;
+      
+      ctx?.drawImage(img, 0, 0, width, height);
+      
+      // Compress to 70% quality
+      const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.7);
+      resolve(compressedDataUrl);
+    };
+    
+    img.src = URL.createObjectURL(file);
+  });
+};
+
 interface ProfilePictureUploadProps {
   currentImageUrl?: string;
   onImageChange: (imageUrl: string) => void;
@@ -26,22 +64,18 @@ export function ProfilePictureUpload({
       return;
     }
 
-    // Validate file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      alert('Image size must be less than 5MB');
+    // Validate file size (max 2MB for better database performance)
+    if (file.size > 2 * 1024 * 1024) {
+      alert('Image size must be less than 2MB');
       return;
     }
 
     setIsUploading(true);
     try {
-      // Create a preview URL
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const result = e.target?.result as string;
-        setPreviewUrl(result);
-        onImageChange(result);
-      };
-      reader.readAsDataURL(file);
+      // Compress and resize image before storing
+      const compressedDataUrl = await compressImage(file);
+      setPreviewUrl(compressedDataUrl);
+      onImageChange(compressedDataUrl);
     } catch (error) {
       console.error('Error uploading image:', error);
       alert('Failed to upload image. Please try again.');

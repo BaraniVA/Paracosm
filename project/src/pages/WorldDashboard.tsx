@@ -197,7 +197,7 @@ export function WorldDashboard() {
         id: role.id,
         name: role.name,
         description: role.description
-      })));      // Fetch questions
+      })));      // Fetch questions (limited to most recent 50 for performance)
       const { data: questionsData, error: questionsError } = await supabase
         .from('questions')
         .select(`
@@ -205,10 +205,11 @@ export function WorldDashboard() {
           author:users!author_id(id, username, profile_picture_url)
         `)
         .eq('world_id', worldId)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(50);
 
       if (questionsError) throw questionsError;
-      setQuestions(questionsData || []);      // Fetch ALL scrolls (both pending and canon) for the dashboard
+      setQuestions(questionsData || []);      // Fetch ALL scrolls (both pending and canon) for the dashboard (limited to most recent 100 for performance)
       const { data: scrollsData, error: scrollsError } = await supabase
         .from('scrolls')
         .select(`
@@ -216,7 +217,8 @@ export function WorldDashboard() {
           author:users!author_id(id, username, profile_picture_url)
         `)
         .eq('world_id', worldId)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(100);
 
       if (scrollsError) throw scrollsError;
       setAllScrolls(scrollsData || []);      // Fetch inhabitants
@@ -233,22 +235,24 @@ export function WorldDashboard() {
       if (inhabitantsError) throw inhabitantsError;
       setInhabitants(inhabitantsData || []);
 
-      // Fetch world records
+      // Fetch world records (limited to most recent 50 for performance)
       const { data: recordsData, error: recordsError } = await supabase
         .from('world_records')
         .select('*')
         .eq('world_id', worldId)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(50);
 
       if (recordsError) throw recordsError;
       setWorldRecords(recordsData || []);
 
-      // Fetch timeline entries
+      // Fetch timeline entries (limited to most recent 100 for performance)
       const { data: timelineData, error: timelineError } = await supabase
         .from('timeline_entries')
         .select('*')
         .eq('world_id', worldId)
-        .order('year', { ascending: true });
+        .order('year', { ascending: true })
+        .limit(100);
 
       if (timelineError) throw timelineError;
       setTimelineEntries(timelineData || []);

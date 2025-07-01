@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
-import { Map, MapPin, Plus, Edit, Trash2, Eye, EyeOff, Navigation, Upload, Image as ImageIcon } from 'lucide-react';
+import { Map, MapPin, Plus, Edit, Trash2, EyeOff, Navigation, Upload, Image as ImageIcon } from 'lucide-react';
+import { ImageUploadSection } from '../components/FileUpload';
+import { deleteImage, detectImageService } from '../lib/imageUpload';
 
 interface MapLocation {
   id: string;
@@ -64,12 +65,7 @@ export function WorldMap({ worldId, isCreator }: WorldMapProps) {
     other: 'bg-gray-500'
   };
 
-  useEffect(() => {
-    fetchLocations();
-    fetchMapImage();
-  }, [worldId]);
-
-  const fetchLocations = async () => {
+  const fetchLocations = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from('world_map_locations')
@@ -84,9 +80,9 @@ export function WorldMap({ worldId, isCreator }: WorldMapProps) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [worldId]);
 
-  const fetchMapImage = async () => {
+  const fetchMapImage = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from('world_maps')
@@ -108,7 +104,12 @@ export function WorldMap({ worldId, isCreator }: WorldMapProps) {
     } catch (error) {
       console.error('Error fetching map image:', error);
     }
-  };
+  }, [worldId]);
+
+  useEffect(() => {
+    fetchLocations();
+    fetchMapImage();
+  }, [fetchLocations, fetchMapImage]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -200,14 +201,22 @@ export function WorldMap({ worldId, isCreator }: WorldMapProps) {
   };
 
   const handleDeleteMap = async () => {
-    if (!mapId || !isCreator) return;
+    if (!mapId || !isCreator || !mapImage) return;
     
-    if (!confirm('Are you sure you want to delete this map? This action cannot be undone.')) {
+    const imageService = detectImageService(mapImage);
+    
+    let confirmMessage = 'Are you sure you want to delete this map? This action cannot be undone.';
+    if (imageService === 'imgbb') {
+      confirmMessage += '\n\nNote: This will remove the map from your world, but ImgBB does not support deletion so the image will remain hosted on their servers.';
+    }
+    
+    if (!confirm(confirmMessage)) {
       return;
     }
 
     setIsDeletingMap(true);
     try {
+      // Delete from database first
       const { error } = await supabase
         .from('world_maps')
         .delete()
@@ -215,8 +224,22 @@ export function WorldMap({ worldId, isCreator }: WorldMapProps) {
       
       if (error) throw error;
       
+      // Try to delete from hosting service
+      if (imageService !== 'imgbb') {
+        const deleteResult = await deleteImage(mapImage);
+        if (!deleteResult.success) {
+          console.warn('Failed to delete from hosting service:', deleteResult.error);
+          // Still continue - database deletion was successful
+        }
+      }
+      
       setMapImage(null);
       setMapId(null);
+      
+      // Show info message for ImgBB
+      if (imageService === 'imgbb') {
+        alert('Map removed from world. Note: The image remains hosted on ImgBB servers.');
+      }
     } catch (error) {
       console.error('Error deleting map:', error);
       alert('Failed to delete map. Please try again.');
@@ -554,35 +577,12 @@ export function WorldMap({ worldId, isCreator }: WorldMapProps) {
             <h3 className="text-lg font-semibold text-white mb-4">Upload Custom Map</h3>
             
             <form onSubmit={handleMapUpload} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">Map Image URL</label>
-                <input
-                  type="url"
-                  value={mapUrl}
-                  onChange={(e) => setMapUrl(e.target.value)}
-                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white"
-                  placeholder="https://example.com/map-image.jpg"
-                  required
-                />
-                <p className="text-gray-400 text-xs mt-1">
-                  Enter the URL of your map image. Use images from Pexels, Unsplash, or other image hosting services.
-                </p>
-              </div>
-
-              {mapUrl && (
-                <div className="border border-gray-600 rounded-lg overflow-hidden">
-                  <img 
-                    src={mapUrl} 
-                    alt="Map preview" 
-                    className="w-full h-40 object-cover"
-                    onError={(e) => {
-                      const target = e.target as HTMLImageElement;
-                      target.src = 'https://images.pexels.com/photos/1252890/pexels-photo-1252890.jpeg?auto=compress&cs=tinysrgb&w=400&h=200&fit=crop';
-                      target.onerror = null;
-                    }}
-                  />
-                </div>
-              )}
+              <ImageUploadSection
+                onImageSelect={(url) => setMapUrl(url)}
+                currentUrl={mapUrl}
+                title="Map Image"
+                description="Upload a map image from your device or enter a URL"
+              />
 
               <div className="flex justify-end space-x-3">
                 <button

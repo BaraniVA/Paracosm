@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
@@ -101,15 +101,18 @@ export function WorldView() {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [scrolls, setScrolls] = useState<ScrollItem[]>([]);
   const [communityPosts, setCommunityPosts] = useState<CommunityPost[]>([]);
-  const [worldRecords, setWorldRecords] = useState<WorldRecord[]>([]);  const [timelineEntries, setTimelineEntries] = useState<TimelineEntry[]>([]);  const [userRole, setUserRole] = useState<string | null>(null);
-  const [userLastRoleCheck, setUserLastRoleCheck] = useState<string | null>(null);
+  const [worldRecords, setWorldRecords] = useState<WorldRecord[]>([]);
+  const [worldRecordsCount, setWorldRecordsCount] = useState<number>(0);
+  const [timelineEntries, setTimelineEntries] = useState<TimelineEntry[]>([]);
+  const [userRole, setUserRole] = useState<string | null>(null);
   const [newRoles, setNewRoles] = useState<Role[]>([]);
   const [newQuestion, setNewQuestion] = useState('');
   const [newScroll, setNewScroll] = useState('');
   const [newPost, setNewPost] = useState({ title: '', content: '' });
   const [mainTab, setMainTab] = useState('worldview');
   const [activeTab, setActiveTab] = useState('overview');
-  const [loading, setLoading] = useState(true);  const [showForkDialog, setShowForkDialog] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [showForkDialog, setShowForkDialog] = useState(false);
   const [showShareCard, setShowShareCard] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState<WorldRecord | null>(null);
   const [showRecordForm, setShowRecordForm] = useState(false);
@@ -126,183 +129,497 @@ export function WorldView() {
     starterQuestions: [] as string[]
   });
 
+  // Add debounced tab loading to prevent rapid API calls
+  const [loadingTimeout, setLoadingTimeout] = useState<NodeJS.Timeout | null>(null);
+  
+  // User profile cache to reduce redundant queries
+  const [userCache, setUserCache] = useState<Record<string, { id: string; username: string; profile_picture_url?: string }>>({});
+  
+  // Polling intervals for smart data refresh
+  const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null);
+  
+  // Helper function to get user profile from cache or fetch if not cached
+  const getUserProfile = async (userId: string) => {
+    if (userCache[userId]) {
+      return userCache[userId];
+    }
+    
+    const { data, error } = await supabase
+      .from('users')
+      .select('id, username, profile_picture_url')
+      .eq('id', userId)
+      .single();
+    
+    if (error) {
+      console.error('Error fetching user profile:', error);
+      return { id: userId, username: 'Unknown User' };
+    }
+    
+    // Cache the user profile
+    setUserCache(prev => ({
+      ...prev,
+      [userId]: data
+    }));
+    return data;
+  };
+  
+  // Batch fetch multiple user profiles efficiently
+  const batchGetUserProfiles = async (userIds: string[]) => {
+    const uncachedIds = userIds.filter(id => !userCache[id]);
+    
+    if (uncachedIds.length === 0) {
+      return userIds.map(id => userCache[id]);
+    }
+    
+    const { data, error } = await supabase
+      .from('users')
+      .select('id, username, profile_picture_url')
+      .in('id', uncachedIds);
+    
+    if (error) {
+      console.error('Error batch fetching user profiles:', error);
+      return userIds.map(id => userCache[id] || { id, username: 'Unknown User' });
+    }
+    
+    // Cache all fetched profiles
+    const newCacheEntries: Record<string, { id: string; username: string; profile_picture_url?: string }> = data.reduce((acc, profile) => ({
+      ...acc,
+      [profile.id]: profile
+    }), {});
+    
+    setUserCache(prev => ({
+      ...prev,
+      ...newCacheEntries
+    }));
+    
+    return userIds.map(id => userCache[id] || newCacheEntries[id]);
+  };
+  
+  const debouncedLoadTabData = (tabName: string) => {
+    // Clear previous timeout
+    if (loadingTimeout) {
+      clearTimeout(loadingTimeout);
+    }
+    
+    // Set new timeout
+    const timeout = setTimeout(() => {
+      loadTabData(tabName);
+    }, 150); // 150ms debounce
+    
+    setLoadingTimeout(timeout);
+  };
+
   useEffect(() => {
     if (!worldId) return;
-    fetchWorldData();
-  }, [worldId, user]);
-
-  const fetchWorldData = async () => {
-    try {      // Fetch world
-      const { data: worldData, error: worldError } = await supabase
-        .from('worlds')
-        .select(`
-          *,
-          creator:users!creator_id(id, username)
-        `)
-        .eq('id', worldId)
-        .single();
-
-      if (worldError) throw worldError;
-      
-      // Fetch parent world info if this is a fork
-      let parent_world = null;
-      if (worldData.origin_world_id) {
-        const { data: parentWorldData } = await supabase
-          .from('worlds')
-          .select(`
-            id,
-            title,
-            creator:users!creator_id(id, username)
-          `)
-          .eq('id', worldData.origin_world_id)
-          .single();
-        
-        parent_world = parentWorldData;
-      }
-      
-      setWorld({ ...worldData, parent_world });
-
-      // Initialize fork data with original world data
-      setForkData(prev => ({
-        ...prev,
-        title: `${worldData.title} - Fork`,
-        description: worldData.description,
-        laws: [...worldData.laws]
-      }));
-
-      // Fetch roles
-      const { data: rolesData, error: rolesError } = await supabase
-        .from('roles')
-        .select('*, created_at')
-        .eq('world_id', worldId);
-
-      if (rolesError) throw rolesError;
-      setRoles(rolesData || []);
-
-      // Initialize fork roles
-      setForkData(prev => ({
-        ...prev,
-        roles: (rolesData || []).map(role => ({
-          name: role.name,
-          description: role.description
-        }))
-      }));      // Check if user has a role and when they joined
-      if (user) {
-        const { data: inhabitantData } = await supabase
-          .from('inhabitants')
-          .select('role_id, joined_at, last_role_check')
-          .eq('world_id', worldId)
-          .eq('user_id', user.id)
-          .single();
-
-        if (inhabitantData) {
-          setUserRole(inhabitantData.role_id);
-          setUserLastRoleCheck(inhabitantData.last_role_check);          // Find new roles created after user's last role check (or joined_at if no last_role_check)
-          const checkTimestamp = inhabitantData.last_role_check || inhabitantData.joined_at;
-          const newRolesForUser = (rolesData || []).filter(role => {
-            // Only show roles that have a created_at timestamp and were created after the check timestamp
-            if (!role.created_at || !checkTimestamp) return false;
-            
-            const roleCreatedAt = new Date(role.created_at);
-            const userCheckTime = new Date(checkTimestamp);
-            
-            // Add some buffer to avoid showing roles created around the same time as user joined
-            const bufferTime = new Date(userCheckTime.getTime() + 5000); // 5 second buffer
-            
-            return roleCreatedAt > bufferTime;
-          });
-          setNewRoles(newRolesForUser);
+    
+    const initializeData = async () => {
+      try {
+        // Start with essential data only - world and roles (for initial render)
+        // Use specific field selection to reduce egress
+        const [worldResponse, rolesResponse] = await Promise.all([
+          supabase
+            .from('worlds')
+            .select('id, title, description, laws, creator_id, origin_world_id, users!creator_id(id, username)')
+            .eq('id', worldId)
+            .single(),
           
-          // Debug logging
-          console.log('User check timestamp:', checkTimestamp);
-          console.log('Available roles:', rolesData?.map(r => ({ name: r.name, created_at: r.created_at })));
-          console.log('New roles for user:', newRolesForUser.map(r => ({ name: r.name, created_at: r.created_at })));
+          supabase
+            .from('roles')
+            .select('id, name, description, created_at, world_id, created_by, is_system_role')
+            .eq('world_id', worldId)
+        ]);
+
+        if (worldResponse.error) throw worldResponse.error;
+        if (rolesResponse.error) throw rolesResponse.error;
+
+        const worldData = worldResponse.data;
+        const rolesData = rolesResponse.data;
+        
+        // Get creator profile from cache or cache it
+        let creatorProfile = { id: worldData.creator_id, username: 'Unknown User' };
+        if (worldData.users) {
+          creatorProfile = Array.isArray(worldData.users) ? worldData.users[0] : worldData.users;
+          // Cache the creator profile
+          setUserCache(prev => ({
+            ...prev,
+            [creatorProfile.id]: creatorProfile
+          }));
         } else {
-          setUserRole(null);
-          setUserLastRoleCheck(null);
-          setNewRoles([]);
+          creatorProfile = await getUserProfile(worldData.creator_id);
         }
-      }      // Fetch questions
-      const { data: questionsData, error: questionsError } = await supabase
-        .from('questions')
-        .select(`
-          *,
-          author:users!author_id(id, username, profile_picture_url)
-        `)
-        .eq('world_id', worldId)
-        .order('created_at', { ascending: false });
-
-      if (questionsError) throw questionsError;
-      setQuestions(questionsData || []);      // Fetch only canon scrolls for public view
-      const { data: scrollsData, error: scrollsError } = await supabase
-        .from('scrolls')
-        .select(`
-          *,
-          author:users!author_id(id, username, profile_picture_url)
-        `)
-        .eq('world_id', worldId)
-        .eq('is_canon', true)
-        .order('created_at', { ascending: false });
-
-      if (scrollsError) throw scrollsError;
-      setScrolls(scrollsData || []);      // Fetch community posts with comment counts
-      const { data: postsData, error: postsError } = await supabase
-        .from('community_posts')
-        .select(`
-          *,
-          author:users!author_id(id, username, profile_picture_url)
-        `)
-        .eq('world_id', worldId)
-        .order('created_at', { ascending: false });
-
-      if (postsError) throw postsError;
-
-      // Get comment counts for each post
-      const postsWithCommentCounts = await Promise.all(
-        (postsData || []).map(async (post) => {
-          const { count: commentCount, error: countError } = await supabase
-            .from('community_comments')
-            .select('*', { count: 'exact', head: true })
-            .eq('post_id', post.id);
-
-          if (countError) {
-            console.error('Error counting comments:', countError);
+        
+        // Fetch parent world info if this is a fork (with minimal fields)
+        let parent_world = null;
+        if (worldData.origin_world_id) {
+          const { data: parentWorldData } = await supabase
+            .from('worlds')
+            .select('id, title, creator_id, users!creator_id(id, username)')
+            .eq('id', worldData.origin_world_id)
+            .single();
+          
+          if (parentWorldData) {
+            const parentCreator = Array.isArray(parentWorldData.users) ? parentWorldData.users[0] : parentWorldData.users;
+            // Cache parent creator profile
+            if (parentCreator) {
+              setUserCache(prev => ({
+                ...prev,
+                [parentCreator.id]: parentCreator
+              }));
+            }
+            parent_world = {
+              id: parentWorldData.id,
+              title: parentWorldData.title,
+              creator: parentCreator || { id: parentWorldData.creator_id, username: 'Unknown User' }
+            };
           }
+        }
+        
+        setWorld({ 
+          ...worldData, 
+          creator: creatorProfile,
+          parent_world: parent_world || undefined
+        });
+        setRoles(rolesData || []);
 
-          return { ...post, comments_count: commentCount || 0 };
-        })
-      );
+        // Initialize fork data with original world data
+        setForkData(prev => ({
+          ...prev,
+          title: `${worldData.title} - Fork`,
+          description: worldData.description,
+          laws: [...worldData.laws],
+          roles: (rolesData || []).map((role: Role) => ({
+            name: role.name,
+            description: role.description
+          }))
+        }));
 
-      setCommunityPosts(postsWithCommentCounts);
+        // Handle user role logic (optimized query)
+        if (user) {
+          const { data: inhabitantData } = await supabase
+            .from('inhabitants')
+            .select('role_id, joined_at, last_role_check')
+            .eq('world_id', worldId)
+            .eq('user_id', user.id)
+            .single();
 
-      // Fetch world records
-      const { data: recordsData, error: recordsError } = await supabase
-        .from('world_records')
-        .select('*')
-        .eq('world_id', worldId)
-        .order('created_at', { ascending: false });
+          if (inhabitantData) {
+            setUserRole(inhabitantData.role_id);
+            
+            // Find new roles created after user's last role check
+            const checkTimestamp = inhabitantData.last_role_check || inhabitantData.joined_at;
+            const newRolesForUser = (rolesData || []).filter((role: Role) => {
+              if (!role.created_at || !checkTimestamp) return false;
+              
+              const roleCreatedAt = new Date(role.created_at);
+              const userCheckTime = new Date(checkTimestamp);
+              const bufferTime = new Date(userCheckTime.getTime() + 5000); // 5 second buffer
+              
+              return roleCreatedAt > bufferTime;
+            });
+            setNewRoles(newRolesForUser);
+          } else {
+            setUserRole(null);
+            setNewRoles([]);
+          }
+        }
 
-      if (recordsError) throw recordsError;
-      setWorldRecords(recordsData || []);
+        // Load initial tab data, timeline, and record counts
+        await Promise.all([
+          loadTabData('overview'),
+          loadTimelineData(),
+          loadWorldRecordsCount()
+        ]);
+        
+      } catch (error) {
+        console.error('Error fetching world data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    initializeData();
+  }, [worldId, user]); // eslint-disable-line react-hooks/exhaustive-deps
+  
+  // Separate effect for polling based on active tab
+  useEffect(() => {
+    if (!worldId) return;
+    
+    // Set up smart polling every 30 seconds for real-time updates
+    const interval = setInterval(async () => {
+      if (activeTab === 'overview') {
+        await loadTabData('overview');
+      } else if (activeTab === 'community') {
+        await loadTabData('community');
+      }
+    }, 30000); // 30 seconds
+    
+    setPollingInterval(interval);
+    
+    // Cleanup on unmount
+    return () => {
+      if (interval) clearInterval(interval);
+      if (pollingInterval) clearInterval(pollingInterval);
+    };
+  }, [activeTab, worldId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-      // Fetch timeline entries
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (loadingTimeout) {
+        clearTimeout(loadingTimeout);
+      }
+    };
+  }, [loadingTimeout]);
+
+  // Optimized function to load tab-specific data with caching and batching
+  const loadTabData = async (tabName: string) => {
+    if (!worldId) return;
+
+    try {
+      switch (tabName) {
+        case 'overview': {
+          // Load minimal data for overview (3 items each) with specific field selection
+          const [questionsRes, scrollsRes, postsRes] = await Promise.all([
+            supabase
+              .from('questions')
+              .select('id, question_text, upvotes, created_at, answer, author_id')
+              .eq('world_id', worldId)
+              .order('created_at', { ascending: false })
+              .limit(3),
+            
+            supabase
+              .from('scrolls')
+              .select('id, scroll_text, is_canon, created_at, author_id')
+              .eq('world_id', worldId)
+              .eq('is_canon', true)
+              .order('created_at', { ascending: false })
+              .limit(3),
+            
+            supabase
+              .from('community_posts')
+              .select('id, title, content, upvotes, created_at, author_id')
+              .eq('world_id', worldId)
+              .order('created_at', { ascending: false })
+              .limit(3)
+          ]);
+
+          if (questionsRes.error) throw questionsRes.error;
+          if (scrollsRes.error) throw scrollsRes.error;
+          if (postsRes.error) throw postsRes.error;
+
+          // Collect all unique author IDs for batch user profile fetching
+          const allAuthorIds = new Set<string>();
+          [...(questionsRes.data || []), ...(scrollsRes.data || []), ...(postsRes.data || [])].forEach(item => {
+            if (item.author_id) allAuthorIds.add(item.author_id);
+          });
+
+          // Batch fetch user profiles for all authors at once
+          const authorProfiles = await batchGetUserProfiles(Array.from(allAuthorIds));
+          const authorMap = authorProfiles.reduce((acc, profile) => ({
+            ...acc,
+            [profile.id]: profile
+          }), {} as Record<string, { id: string; username: string; profile_picture_url?: string }>);
+
+          // Transform data to match expected structure with cached user profiles
+          const questionsData = (questionsRes.data || []).map(q => ({
+            ...q,
+            author: authorMap[q.author_id] || { id: q.author_id, username: 'Unknown User' }
+          }));
+          
+          const scrollsData = (scrollsRes.data || []).map(s => ({
+            ...s,
+            author: authorMap[s.author_id] || { id: s.author_id, username: 'Unknown User' }
+          }));
+
+          // Batch fetch comment counts for all 3 posts at once (much more efficient)
+          const postIds = (postsRes.data || []).map(post => post.id);
+          const commentCounts = await Promise.all(
+            postIds.map(async (postId) => {
+              const { count } = await supabase
+                .from('community_comments')
+                .select('*', { count: 'exact', head: true })
+                .eq('post_id', postId);
+              return { postId, count: count || 0 };
+            })
+          );
+          
+          const commentCountMap = commentCounts.reduce((acc, { postId, count }) => ({
+            ...acc,
+            [postId]: count
+          }), {} as Record<string, number>);
+
+          const postsWithCounts = (postsRes.data || []).map(post => ({
+            ...post,
+            comments_count: commentCountMap[post.id] || 0,
+            author: authorMap[post.author_id] || { id: post.author_id, username: 'Unknown User' }
+          }));
+
+          setQuestions(questionsData);
+          setScrolls(scrollsData);
+          setCommunityPosts(postsWithCounts);
+          break;
+        }
+
+        case 'community': {
+          // Load full community data with optimized queries
+          const { data: allPosts, error: postsError } = await supabase
+            .from('community_posts')
+            .select('id, title, content, upvotes, created_at, author_id')
+            .eq('world_id', worldId)
+            .order('created_at', { ascending: false })
+            .limit(30);
+
+          if (postsError) throw postsError;
+
+          // Batch fetch user profiles for all post authors
+          const postAuthorIds = [...new Set((allPosts || []).map(post => post.author_id))];
+          const postAuthorProfiles = await batchGetUserProfiles(postAuthorIds);
+          const postAuthorMap = postAuthorProfiles.reduce((acc, profile) => ({
+            ...acc,
+            [profile.id]: profile
+          }), {} as Record<string, { id: string; username: string; profile_picture_url?: string }>);
+
+          // Batch fetch comment counts for all posts
+          const allPostIds = (allPosts || []).map(post => post.id);
+          const allCommentCounts = await Promise.all(
+            allPostIds.map(async (postId) => {
+              const { count } = await supabase
+                .from('community_comments')
+                .select('*', { count: 'exact', head: true })
+                .eq('post_id', postId);
+              return { postId, count: count || 0 };
+            })
+          );
+          
+          const allCommentCountMap = allCommentCounts.reduce((acc, { postId, count }) => ({
+            ...acc,
+            [postId]: count
+          }), {} as Record<string, number>);
+
+          const allPostsWithCounts = (allPosts || []).map(post => ({
+            ...post,
+            comments_count: allCommentCountMap[post.id] || 0,
+            author: postAuthorMap[post.author_id] || { id: post.author_id, username: 'Unknown User' }
+          }));
+
+          setCommunityPosts(allPostsWithCounts);
+          break;
+        }
+
+        case 'questions': {
+          // Load full questions with optimized queries
+          const { data: allQuestions, error: questionsError } = await supabase
+            .from('questions')
+            .select('id, question_text, upvotes, created_at, answer, author_id')
+            .eq('world_id', worldId)
+            .order('created_at', { ascending: false })
+            .limit(50);
+
+          if (questionsError) throw questionsError;
+          
+          // Batch fetch user profiles for all question authors
+          const questionAuthorIds = [...new Set((allQuestions || []).map(q => q.author_id))];
+          const questionAuthorProfiles = await batchGetUserProfiles(questionAuthorIds);
+          const questionAuthorMap = questionAuthorProfiles.reduce((acc, profile) => ({
+            ...acc,
+            [profile.id]: profile
+          }), {} as Record<string, { id: string; username: string; profile_picture_url?: string }>);
+          
+          const questionsData = (allQuestions || []).map(q => ({
+            ...q,
+            author: questionAuthorMap[q.author_id] || { id: q.author_id, username: 'Unknown User' }
+          }));
+          
+          setQuestions(questionsData);
+          break;
+        }
+
+        case 'lore': {
+          // Load full canon scrolls with optimized queries
+          const { data: allScrolls, error: scrollsError } = await supabase
+            .from('scrolls')
+            .select('id, scroll_text, is_canon, created_at, author_id')
+            .eq('world_id', worldId)
+            .eq('is_canon', true)
+            .order('created_at', { ascending: false })
+            .limit(30);
+
+          if (scrollsError) throw scrollsError;
+          
+          // Batch fetch user profiles for all scroll authors
+          const scrollAuthorIds = [...new Set((allScrolls || []).map(s => s.author_id))];
+          const scrollAuthorProfiles = await batchGetUserProfiles(scrollAuthorIds);
+          const scrollAuthorMap = scrollAuthorProfiles.reduce((acc, profile) => ({
+            ...acc,
+            [profile.id]: profile
+          }), {} as Record<string, { id: string; username: string; profile_picture_url?: string }>);
+          
+          const scrollsData = (allScrolls || []).map(s => ({
+            ...s,
+            author: scrollAuthorMap[s.author_id] || { id: s.author_id, username: 'Unknown User' }
+          }));
+          
+          setScrolls(scrollsData);
+          break;
+        }
+
+        case 'records': {
+          // Load world records (no user profiles needed here)
+          const { data: recordsData, error: recordsError } = await supabase
+            .from('world_records')
+            .select('*')
+            .eq('world_id', worldId)
+            .order('created_at', { ascending: false })
+            .limit(50);
+
+          if (recordsError) throw recordsError;
+          setWorldRecords(recordsData || []);
+          break;
+        }
+      }
+    } catch (error) {
+      console.error(`Error loading ${tabName} data:`, error);
+    }
+  };
+
+  // Load timeline data separately (visible on main page) with optimized field selection
+  const loadTimelineData = async () => {
+    if (!worldId) return;
+
+    try {
       const { data: timelineData, error: timelineError } = await supabase
         .from('timeline_entries')
-        .select('*')
+        .select('id, era_title, year, event_title, description, tag, location, roles_involved, is_private, subnotes, created_at')
         .eq('world_id', worldId)
-        .order('year', { ascending: true });
+        .order('year', { ascending: true })
+        .limit(100);
 
       if (timelineError) throw timelineError;
       setTimelineEntries(timelineData || []);
     } catch (error) {
-      console.error('Error fetching world data:', error);
-    } finally {
-      setLoading(false);
+      console.error('Error loading timeline data:', error);
     }
   };
 
-  // World Records functions
-  const createWorldRecord = async (data: any) => {
+  // Load world records count separately (for tab display) with optimized query
+  const loadWorldRecordsCount = async () => {
+    if (!worldId) return;
+
+    try {
+      const { count, error: recordsError } = await supabase
+        .from('world_records')
+        .select('*', { count: 'exact', head: true })
+        .eq('world_id', worldId);
+
+      if (recordsError) throw recordsError;
+      setWorldRecordsCount(count || 0);
+    } catch (error) {
+      console.error('Error loading world records count:', error);
+    }
+  };
+
+  // World Records functions with proper typing
+  const createWorldRecord = async (data: Partial<WorldRecord>) => {
     if (!user) return;
 
     const { error } = await supabase
@@ -311,7 +628,8 @@ export function WorldView() {
 
     if (error) throw error;
     setShowRecordForm(false);
-    fetchWorldData();
+    // Reload records data instead of all data
+    await loadTabData('records');
   };
 
   const updateWorldRecord = async (id: string, data: Partial<WorldRecord>) => {
@@ -321,7 +639,8 @@ export function WorldView() {
       .eq('id', id);
 
     if (error) throw error;
-    fetchWorldData();
+    // Reload records data instead of all data
+    await loadTabData('records');
   };
 
   const deleteWorldRecord = async (id: string) => {
@@ -331,11 +650,12 @@ export function WorldView() {
       .eq('id', id);
 
     if (error) throw error;
-    fetchWorldData();
+    // Reload records data instead of all data
+    await loadTabData('records');
   };
 
-  // Timeline functions
-  const createTimelineEntry = async (data: any) => {
+  // Timeline functions with proper typing
+  const createTimelineEntry = async (data: Partial<TimelineEntry>) => {
     if (!user) return;
 
     const { error } = await supabase
@@ -345,10 +665,11 @@ export function WorldView() {
     if (error) throw error;
     setShowTimelineForm(false);
     setEditingTimelineEntry(null);
-    fetchWorldData();
+    // Reload timeline data instead of all data
+    await loadTimelineData();
   };
 
-  const updateTimelineEntry = async (data: any) => {
+  const updateTimelineEntry = async (data: Partial<TimelineEntry>) => {
     if (!editingTimelineEntry) return;
 
     const { error } = await supabase
@@ -359,7 +680,8 @@ export function WorldView() {
     if (error) throw error;
     setShowTimelineForm(false);
     setEditingTimelineEntry(null);
-    fetchWorldData();
+    // Reload timeline data instead of all data
+    await loadTimelineData();
   };
 
   const deleteTimelineEntry = async (id: string) => {
@@ -369,7 +691,8 @@ export function WorldView() {
       .eq('id', id);
 
     if (error) throw error;
-    fetchWorldData();
+    // Reload timeline data instead of all data
+    await loadTimelineData();
   };
 
   const joinRole = async (roleId: string) => {
@@ -407,7 +730,6 @@ export function WorldView() {
 
       if (error) throw error;
       setUserRole(newRoleId);
-      setUserLastRoleCheck(now);
       // Clear all new roles since user has now seen and interacted with the role system
       setNewRoles([]);
       
@@ -429,7 +751,6 @@ export function WorldView() {
         .eq('world_id', worldId);
 
       if (error) throw error;
-      setUserLastRoleCheck(now);
       setNewRoles([]);
       
       console.log('Roles marked as seen, timestamp updated to:', now);
@@ -468,7 +789,8 @@ export function WorldView() {
       }
 
       setNewQuestion('');
-      fetchWorldData();
+      // Reload questions data instead of all data
+      await loadTabData('questions');
     } catch (error) {
       console.error('Error submitting question:', error);
     }
@@ -505,6 +827,8 @@ export function WorldView() {
 
       setNewScroll('');
       alert('Your scroll has been submitted for review by the world creator!');
+      // Reload scrolls data instead of all data
+      await loadTabData('lore');
     } catch (error) {
       console.error('Error submitting scroll:', error);
     }
@@ -543,7 +867,8 @@ export function WorldView() {
       }
 
       setNewPost({ title: '', content: '' });
-      fetchWorldData();
+      // Reload community posts data instead of all data
+      await loadTabData('community');
     } catch (error) {
       console.error('Error submitting community post:', error);
     }
@@ -569,8 +894,8 @@ export function WorldView() {
     );
   };
 
-  // Fork functionality (keeping existing code)
-  const updateForkData = (field: string, value: any) => {
+  // Fork functionality with proper typing
+  const updateForkData = (field: string, value: string | string[] | { name: string; description: string }[]) => {
     setForkData(prev => ({ ...prev, [field]: value }));
   };
 
@@ -938,24 +1263,28 @@ export function WorldView() {
 
       {/* Navigation Tabs */}
       <div className="border-b border-gray-700 overflow-x-auto">
-        <nav className="flex space-x-4 sm:space-x-8 min-w-max px-4 sm:px-0">
-          {[
-            { id: 'overview', label: 'Overview' },
-            { id: 'community', label: 'Community', count: communityPosts.length },
-            { id: 'questions', label: 'Questions', count: questions.length },
-            { id: 'lore', label: 'Canon Lore', count: canonScrolls.length },
-            { id: 'records', label: 'World Records', count: worldRecords.length },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center px-1 py-3 font-medium text-sm border-b-2 transition-colors whitespace-nowrap ${
-                activeTab === tab.id
-                  ? 'border-indigo-500 text-indigo-400'
-                  : 'border-transparent text-gray-400 hover:text-gray-300'
-              }`}
-            >
-              {tab.icon && <tab.icon className="h-4 w-4 mr-2" />}
+        <nav className="flex space-x-4 sm:space-x-8 min-w-max px-4 sm:px-0">      {[
+        { id: 'overview', label: 'Overview' },
+        { id: 'community', label: 'Community', count: communityPosts.length },
+        { id: 'questions', label: 'Questions', count: questions.length },
+        { id: 'lore', label: 'Canon Lore', count: canonScrolls.length },
+        { id: 'records', label: 'World Records', count: worldRecordsCount },
+      ].map((tab) => (
+        <button
+          key={tab.id}
+          onClick={() => {
+            setActiveTab(tab.id);
+            // Load tab data when switching (lazy loading with debounce)
+            if (tab.id !== 'overview') {
+              debouncedLoadTabData(tab.id);
+            }
+          }}
+          className={`flex items-center px-1 py-3 font-medium text-sm border-b-2 transition-colors whitespace-nowrap ${
+            activeTab === tab.id
+              ? 'border-indigo-500 text-indigo-400'
+              : 'border-transparent text-gray-400 hover:text-gray-300'
+          }`}
+        >
               {tab.label}
               {tab.count !== undefined && (
                 <span className="ml-2 px-2 py-0.5 bg-gray-700 text-gray-300 text-xs rounded-full">
@@ -1605,7 +1934,8 @@ export function WorldView() {
                   className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
                 >
                   Fork World
-                </button>            </div>
+                </button>
+              </div>
           </div>
         </div>
       )}

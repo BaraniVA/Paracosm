@@ -48,14 +48,15 @@ export function ExploreWorlds() {
 
   const fetchWorlds = async () => {
     try {
-      // Fetch all worlds with creator info (simplified query)
+      // Fetch all worlds with creator info (limited to most recent 50 for performance)
       const { data: worldsData, error: worldsError } = await supabase
         .from('worlds')
         .select(`
           *,
           creator:users!creator_id(id, username)
         `)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(50);
 
       if (worldsError) throw worldsError;
 
