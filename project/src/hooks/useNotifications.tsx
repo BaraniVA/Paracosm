@@ -56,17 +56,11 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     
     setIsLoading(true);
     try {
-      // Use a single query with joins to get all data at once instead of multiple queries
       const { data, error } = await supabase
         .from('notifications')
-        .select(`
-          *,
-          from_user:users!from_user_id(username),
-          world:worlds!related_world_id(title)
-        `)
+        .select('*')
         .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(15); // Limit to 15 most recent notifications to reduce data transfer
+        .order('created_at', { ascending: false });
 
       if (error) {
         if (error.code === 'PGRST200' || error.message?.includes('Could not find')) {
@@ -77,12 +71,47 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         throw error;
       }
       
-      // Transform the data to match expected structure
-      const enhancedNotifications = (data || []).map(notification => ({
-        ...notification,
-        from_user: notification.from_user,
-        world: notification.world ? { name: notification.world.title } : null
-      }));
+      // Enhance notifications with user and world information
+      const enhancedNotifications = await Promise.all(
+        (data || []).map(async (notification) => {
+          let fromUser = null;
+          let world = null;
+          
+          // Get username if from_user_id exists
+          if (notification.from_user_id) {
+            try {
+              const { data: userData } = await supabase
+                .from('users')
+                .select('username')
+                .eq('id', notification.from_user_id)
+                .single();
+              fromUser = userData;
+            } catch (err) {
+              console.warn('Could not fetch user data:', err);
+            }
+          }
+          
+          // Get world name if related_world_id exists
+          if (notification.related_world_id) {
+            try {
+              const { data: worldData } = await supabase
+                .from('worlds')
+                .select('title')
+                .eq('id', notification.related_world_id)
+                .single();
+              world = worldData ? { name: worldData.title } : null;
+            } catch (err) {
+              console.warn('Could not fetch world data:', err);
+            }
+          }
+          
+          return {
+            ...notification,
+            from_user: fromUser,
+            world
+          };
+        })
+      );
       
       setNotifications(enhancedNotifications);
     } catch (error) {
@@ -145,22 +174,9 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     }
   }, []);
 
-  // Set up real-time subscription with throttling
+  // Set up real-time subscription
   useEffect(() => {
     if (!user) return;
-
-    let timeoutId: NodeJS.Timeout | null = null;
-
-    const handleNotificationChange = (payload: any) => {
-      // Debounce refetch calls to prevent excessive API calls
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-      }
-      
-      timeoutId = setTimeout(() => {
-        fetchNotifications();
-      }, 1000); // Wait 1 second before refetching
-    };
 
     const channel = supabase
       .channel('notifications')
@@ -172,14 +188,13 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
           table: 'notifications',
           filter: `user_id=eq.${user.id}`
         },
-        handleNotificationChange
+        () => {
+          fetchNotifications(); // Refetch when notifications change
+        }
       )
       .subscribe();
 
     return () => {
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-      }
       supabase.removeChannel(channel);
     };
   }, [user, fetchNotifications]);
