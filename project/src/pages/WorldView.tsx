@@ -201,10 +201,10 @@ export function WorldView() {
       clearTimeout(loadingTimeout);
     }
     
-    // Set new timeout
+    // Set new timeout with immediate refresh for tab switches  
     const timeout = setTimeout(() => {
-      loadTabData(tabName);
-    }, 150); // 150ms debounce
+      loadTabData(tabName); // Load data on tab switch
+    }, 50); // Reduced debounce for immediate feel
     
     setLoadingTimeout(timeout);
   };
@@ -340,25 +340,59 @@ export function WorldView() {
     initializeData();
   }, [worldId, user]); // eslint-disable-line react-hooks/exhaustive-deps
   
-  // Separate effect for polling based on active tab
+  // Separate effect for smart polling with visibility detection
   useEffect(() => {
     if (!worldId) return;
     
-    // Set up smart polling every 60 seconds for real-time updates (reduced from 30s)
-    const interval = setInterval(async () => {
-      if (activeTab === 'overview') {
-        await loadTabData('overview');
-      } else if (activeTab === 'community') {
-        await loadTabData('community');
-      }
-    }, 60000); // Increased from 30 seconds to 60 seconds
+    let interval: NodeJS.Timeout | null = null;
     
-    setPollingInterval(interval);
+    const setupPolling = () => {
+      // Only poll if page is visible and user is on overview/community tabs
+      if (document.hidden) return;
+      
+      if (activeTab === 'overview' || activeTab === 'community') {
+        interval = setInterval(async () => {
+          // Double-check visibility before making API calls
+          if (!document.hidden) {
+            if (activeTab === 'overview') {
+              await loadTabData('overview');
+            } else if (activeTab === 'community') {
+              await loadTabData('community');
+            }
+          }
+        }, 300000); // Increased to 5 minutes (300 seconds)
+      }
+    };
+    
+    const handleVisibilityChange = () => {
+      if (interval) {
+        clearInterval(interval);
+        interval = null;
+      }
+      
+      if (!document.hidden) {
+        // When user returns, refresh current tab data immediately
+        if (activeTab === 'overview' || activeTab === 'community') {
+          loadTabData(activeTab);
+        }
+        // Then setup polling again
+        setupPolling();
+      }
+    };
+    
+    // Setup initial polling
+    setupPolling();
+    
+    // Listen for visibility changes
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    if (interval) setPollingInterval(interval);
     
     // Cleanup on unmount
     return () => {
       if (interval) clearInterval(interval);
       if (pollingInterval) clearInterval(pollingInterval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [activeTab, worldId]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -431,21 +465,19 @@ export function WorldView() {
             author: authorMap[s.author_id] || { id: s.author_id, username: 'Unknown User' }
           }));
 
-          // Batch fetch comment counts for all 3 posts at once (much more efficient)
+          // Batch fetch comment counts for 3 posts at once (much more efficient)
           const postIds = (postsRes.data || []).map(post => post.id);
-          const commentCounts = await Promise.all(
-            postIds.map(async (postId) => {
-              const { count } = await supabase
-                .from('community_comments')
-                .select('*', { count: 'exact', head: true })
-                .eq('post_id', postId);
-              return { postId, count: count || 0 };
-            })
-          );
           
-          const commentCountMap = commentCounts.reduce((acc, { postId, count }) => ({
+          // Use a single query with IN clause instead of Promise.all for better performance
+          const { data: commentData } = await supabase
+            .from('community_comments')
+            .select('post_id')
+            .in('post_id', postIds);
+          
+          // Count comments per post
+          const commentCountMap = (commentData || []).reduce((acc, comment) => ({
             ...acc,
-            [postId]: count
+            [comment.post_id]: (acc[comment.post_id] || 0) + 1
           }), {} as Record<string, number>);
 
           const postsWithCounts = (postsRes.data || []).map(post => ({
@@ -479,21 +511,19 @@ export function WorldView() {
             [profile.id]: profile
           }), {} as Record<string, { id: string; username: string; profile_picture_url?: string }>);
 
-          // Batch fetch comment counts for all posts
+          // Optimized comment counts with single query
           const allPostIds = (allPosts || []).map(post => post.id);
-          const allCommentCounts = await Promise.all(
-            allPostIds.map(async (postId) => {
-              const { count } = await supabase
-                .from('community_comments')
-                .select('*', { count: 'exact', head: true })
-                .eq('post_id', postId);
-              return { postId, count: count || 0 };
-            })
-          );
           
-          const allCommentCountMap = allCommentCounts.reduce((acc, { postId, count }) => ({
+          // Use single query with IN clause for all posts
+          const { data: allCommentData } = await supabase
+            .from('community_comments') 
+            .select('post_id')
+            .in('post_id', allPostIds);
+          
+          // Count comments per post efficiently
+          const allCommentCountMap = (allCommentData || []).reduce((acc, comment) => ({
             ...acc,
-            [postId]: count
+            [comment.post_id]: (acc[comment.post_id] || 0) + 1
           }), {} as Record<string, number>);
 
           const allPostsWithCounts = (allPosts || []).map(post => ({
