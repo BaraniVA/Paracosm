@@ -66,6 +66,35 @@ export function useAuth() {
     });
 
     if (error) throw error;
+    const user = data.user;
+
+  if (user) {
+    // Check if user profile exists
+    const { data: existingProfile, error: selectError } = await supabase
+      .from('users')
+      .select('id')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    if (selectError) {
+      console.warn('Error checking profile existence:', selectError);
+    }
+
+    if (!existingProfile) {
+      // Insert new profile
+      const { error: insertError } = await supabase.from('users').insert({
+        id: user.id,
+        username: user.user_metadata.username ?? 'default_username',
+        email: user.email,
+        bio: '',
+      });
+
+      if (insertError) {
+        console.warn('Failed to insert user profile:', insertError);
+      }
+    }
+  }
+
     return data;
   };
 
