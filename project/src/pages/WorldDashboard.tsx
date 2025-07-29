@@ -3,12 +3,15 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 import { notifyUserInteraction } from '../lib/notifications';
-import { Users, MessageSquare, Scroll, GitBranch, Settings, Check, X, Trash2, ArrowUp, Edit, Save, Plus, BookOpen, UserX, Map, Image, Clipboard } from 'lucide-react';
+import { Users, MessageSquare, Scroll, GitBranch, Settings, Check, X, Trash2, ArrowUp, Edit, Save, Plus, BookOpen, UserX, Map, Image, Clipboard, Send } from 'lucide-react';
 import { CreateEditWorldRecordForm } from '../components/CreateEditWorldRecordForm';
 import { TimelineView } from '../components/TimelineView';
 import { CreateEditTimelineEntryForm } from '../components/CreateEditTimelineEntryForm';
 import { UserLink } from '../components/UserLink';
 import { UserAvatar } from '../components/UserAvatar';
+import { RichTextEditor } from '../components/RichTextEditor';
+import { MarkdownRenderer } from '../components/MarkdownRenderer';
+import { ExportWorldButton } from '../components/ExportWorldButton';
 import { WorldMap } from './WorldMap';
 import { WorldGallery } from './WorldGallery';
 import { WorldWorkboard } from './WorldWorkBoard';
@@ -850,15 +853,11 @@ export function WorldDashboard() {
           {/* Editable Description */}
           {editingDescription ? (
             <div className="space-y-2 mb-2 w-full">
-              <textarea
+              <RichTextEditor
                 value={editedDescription}
-                onChange={(e) => setEditedDescription(e.target.value)}
+                onChange={setEditedDescription}
+                placeholder="Enter world description..."
                 rows={4}
-                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none"
-                onKeyPress={(e) => {
-                  if (e.key === 'Escape') cancelEditDescription();
-                }}
-                autoFocus
               />
               <div className="flex gap-2">
                 <button
@@ -879,7 +878,9 @@ export function WorldDashboard() {
             </div>
           ) : (
             <div className="flex items-start gap-3 mb-2">
-              <p className="text-gray-400 text-sm flex-1 break-words">{world.description}</p>
+              <div className="text-gray-400 text-sm flex-1 break-words">
+                <MarkdownRenderer content={world.description || 'No description provided'} />
+              </div>
               <button
                 onClick={() => setEditingDescription(true)}
                 className="p-1 text-gray-400 hover:text-white transition-colors flex-shrink-0"
@@ -891,12 +892,19 @@ export function WorldDashboard() {
 
           <p className="text-gray-400 text-sm">Creator Dashboard</p>
         </div>
-        <button
-          onClick={() => navigate(`/world/${worldId}`)}
-          className="w-full lg:w-auto px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium"
-        >
-          View Public World
-        </button>
+        <div className="flex flex-col sm:flex-row gap-3">
+          <ExportWorldButton 
+            worldId={worldId!} 
+            worldTitle={world.title} 
+            isCreator={true} 
+          />
+          <button
+            onClick={() => navigate(`/world/${worldId}`)}
+            className="w-full sm:w-auto px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium"
+          >
+            View Public World
+          </button>
+        </div>
       </div>
 
       {/* World Laws Management */}
@@ -945,13 +953,14 @@ export function WorldDashboard() {
             {editedLaws.map((law, index) => (
               <div key={index} className="flex items-start gap-3">
                 <span className="text-indigo-400 font-mono text-sm font-bold w-8 flex-shrink-0 mt-2">{index + 1}.</span>
-                <input
-                  type="text"
-                  value={law}
-                  onChange={(e) => updateLaw(index, e.target.value)}
-                  className="flex-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                  placeholder="Enter world law..."
-                />
+                <div className="flex-1">
+                  <RichTextEditor
+                    value={law}
+                    onChange={(value) => updateLaw(index, value)}
+                    placeholder="Enter world law..."
+                    rows={2}
+                  />
+                </div>
                 {editedLaws.length > 1 && (
                   <button
                     onClick={() => removeLaw(index)}
@@ -968,7 +977,9 @@ export function WorldDashboard() {
             {world.laws.map((law, index) => (
               <div key={index} className="flex items-start space-x-3 p-4 bg-gray-700 rounded-lg">
                 <span className="text-indigo-400 font-mono text-sm font-bold mt-0.5 flex-shrink-0">{index + 1}.</span>
-                <p className="text-gray-200 text-sm leading-relaxed break-words min-w-0">{law}</p>
+                <div className="text-gray-200 text-sm leading-relaxed break-words min-w-0">
+                  <MarkdownRenderer content={law} />
+                </div>
               </div>
             ))}
           </div>
@@ -1048,12 +1059,11 @@ export function WorldDashboard() {
                     <label className="block text-sm font-medium text-gray-300 mb-1">
                       Role Description
                     </label>
-                    <textarea
+                    <RichTextEditor
                       value={role.description}
-                      onChange={(e) => updateRole(index, 'description', e.target.value)}
-                      rows={2}
-                      className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none"
+                      onChange={(value) => updateRole(index, 'description', value)}
                       placeholder="Role description and responsibilities..."
+                      rows={2}
                     />
                   </div>
                 </div>
@@ -1080,9 +1090,9 @@ export function WorldDashboard() {
                 {roles.map((role) => (
                   <div key={role.id} className="p-4 bg-gray-700 rounded-lg">
                     <h4 className="font-medium text-white mb-2 break-words">{role.name}</h4>
-                    <p className="text-gray-300 text-sm leading-relaxed break-words">
-                      {role.description || 'No description provided'}
-                    </p>
+                    <div className="text-gray-300 text-sm leading-relaxed break-words">
+                      <MarkdownRenderer content={role.description || 'No description provided'} />
+                    </div>
                   </div>
                 ))}
               </div>
@@ -1293,7 +1303,7 @@ export function WorldDashboard() {
                         </button>
                       </div>
                     </div>
-                    <p className="text-gray-200 leading-relaxed break-words">{scroll.scroll_text}</p>
+                    <MarkdownRenderer content={scroll.scroll_text} className="text-gray-200 leading-relaxed break-words" />
                   </div>
                 ))}
               </div>
@@ -1346,7 +1356,7 @@ export function WorldDashboard() {
                         </button>
                       </div>
                     </div>
-                    <p className="text-gray-200 leading-relaxed break-words">{scroll.scroll_text}</p>
+                    <MarkdownRenderer content={scroll.scroll_text} className="text-gray-200 leading-relaxed break-words" />
                   </div>
                 ))}
               </div>
@@ -1384,31 +1394,30 @@ export function WorldDashboard() {
                         <span className="text-sm">{question.upvotes}</span>
                       </div>
                     </div>
-                    <p className="text-gray-200 mb-4 leading-relaxed break-words">{question.question_text}</p>
-                    <div className="flex flex-col sm:flex-row gap-2">
-                      <input
-                        type="text"
-                        placeholder="Write your answer..."
+                    <MarkdownRenderer content={question.question_text} className="text-gray-200 mb-4 leading-relaxed break-words" />
+                    <div className="space-y-3">
+                      <RichTextEditor
                         value={answerInputs[question.id] || ''}
-                        onChange={(e) => handleAnswerInputChange(question.id, e.target.value)}
-                        className="flex-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                        onKeyPress={(e) => {
-                          if (e.key === 'Enter' && answerInputs[question.id]?.trim()) {
-                            answerQuestion(question.id, answerInputs[question.id].trim());
-                          }
-                        }}
+                        onChange={(value) => handleAnswerInputChange(question.id, value)}
+                        placeholder="Write your detailed answer using formatting..."
+                        rows={3}
+                        className="w-full"
+                        maxLength={5000}
                       />
-                      <button
-                        onClick={() => {
-                          if (answerInputs[question.id]?.trim()) {
-                            answerQuestion(question.id, answerInputs[question.id].trim());
-                          }
-                        }}
-                        disabled={!answerInputs[question.id]?.trim()}
-                        className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
-                      >
-                        Answer
-                      </button>
+                      <div className="flex justify-end">
+                        <button
+                          onClick={() => {
+                            if (answerInputs[question.id]?.trim()) {
+                              answerQuestion(question.id, answerInputs[question.id].trim());
+                            }
+                          }}
+                          disabled={!answerInputs[question.id]?.trim()}
+                          className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+                        >
+                          <Send className="h-4 w-4 mr-2" />
+                          Answer Question
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))}

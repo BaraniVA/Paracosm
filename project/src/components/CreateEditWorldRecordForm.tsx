@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Save, X } from 'lucide-react';
 import { LinkReferenceSelector } from './LinkReferenceSelector';
+import { RichTextEditor } from './RichTextEditor';
 
 interface WorldRecordData {
   title: string;
@@ -227,13 +228,13 @@ export function CreateEditWorldRecordForm({ worldId, initialData, onSubmit, onCa
             <label className="block text-sm font-medium text-gray-300 mb-2">
               Description *
             </label>
-            <textarea
+            <RichTextEditor
               value={formData.description}
-              onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+              onChange={(value) => setFormData(prev => ({ ...prev, description: value }))}
               rows={15}
-              className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+              className="w-full"
               placeholder="Enter detailed description for this record. You can write as much as needed - this is your wiki page for this topic..."
-              required
+              maxLength={50000}
             />
             <p className="text-gray-400 text-xs mt-1">
               Write as much detail as you need. This supports large amounts of text for comprehensive lore documentation.

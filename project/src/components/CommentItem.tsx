@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { MessageCircle, CornerDownRight, Trash2, MoreHorizontal } from 'lucide-react';
 import { UserLink } from './UserLink';
 import { UserAvatar } from './UserAvatar';
+import { RichTextEditor } from './RichTextEditor';
 
 interface CommunityComment {
   id: string;
@@ -67,13 +68,6 @@ export function CommentItem({
       alert('Failed to delete comment. Please try again.');
     } finally {
       setIsDeleting(false);
-    }
-  };
-
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSubmitReply();
     }
   };
 
@@ -164,14 +158,15 @@ export function CommentItem({
         {/* Reply Input */}
         {showReplyInput && user && (
           <div className="mt-3 ml-11 space-y-2">
-            <textarea
+            <RichTextEditor
               value={replyText}
-              onChange={(e) => setReplyText(e.target.value)}
-              onKeyPress={handleKeyPress}
+              onChange={(value) => setReplyText(value)}
               placeholder={`Reply to ${comment.author.username}...`}
               rows={2}
-              className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none text-sm"
+              className="w-full text-sm"
+              maxLength={1000}
               disabled={isSubmitting}
+              showPreview={false}
             />
             <div className="flex justify-end space-x-2">
               <button
