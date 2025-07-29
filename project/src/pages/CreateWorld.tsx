@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 import { Plus, X, Save } from 'lucide-react';
+import { RichTextEditor } from '../components/RichTextEditor';
 
 export function CreateWorld() {
   const { user } = useAuth();
@@ -165,14 +166,11 @@ export function CreateWorld() {
               <label htmlFor="description" className="block text-sm font-medium text-gray-300 mb-1">
                 World Description *
               </label>
-              <textarea
-                id="description"
+              <RichTextEditor
                 value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                required
-                rows={4}
-                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                onChange={(value) => setFormData({ ...formData, description: value })}
                 placeholder="Describe your world's core concept, setting, and what makes it unique..."
+                rows={4}
               />
             </div>
           </div>
@@ -199,20 +197,21 @@ export function CreateWorld() {
 
           <div className="space-y-3">
             {formData.laws.map((law, index) => (
-              <div key={index} className="flex items-center space-x-2">
-                <span className="text-gray-400 text-sm w-8">{index + 1}.</span>
-                <input
-                  type="text"
-                  value={law}
-                  onChange={(e) => updateLaw(index, e.target.value)}
-                  className="flex-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                  placeholder="Time flows backwards every full moon..."
-                />
+              <div key={index} className="flex items-start space-x-2">
+                <span className="text-gray-400 text-sm w-8 mt-2">{index + 1}.</span>
+                <div className="flex-1">
+                  <RichTextEditor
+                    value={law}
+                    onChange={(value) => updateLaw(index, value)}
+                    placeholder="Time flows backwards every full moon..."
+                    rows={2}
+                  />
+                </div>
                 {formData.laws.length > 1 && (
                   <button
                     type="button"
                     onClick={() => removeLaw(index)}
-                    className="p-1 text-red-400 hover:text-red-300"
+                    className="p-1 text-red-400 hover:text-red-300 mt-2"
                   >
                     <X className="h-4 w-4" />
                   </button>
@@ -263,12 +262,11 @@ export function CreateWorld() {
                     className="w-full px-3 py-2  bg-gray-600 border border-gray-500 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                     placeholder="Role name (e.g., Scholar, Guardian, Seeker)"
                   />
-                  <textarea
+                  <RichTextEditor
                     value={role.description}
-                    onChange={(e) => updateRole(index, 'description', e.target.value)}
-                    rows={2}
-                    className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                    onChange={(value) => updateRole(index, 'description', value)}
                     placeholder="Role description and responsibilities..."
+                    rows={2}
                   />
                 </div>
               </div>

@@ -13,6 +13,8 @@ import { CreateEditTimelineEntryForm } from '../components/CreateEditTimelineEnt
 import { VotingSystem } from '../components/VotingSystem';
 import { WorldShareCard } from '../components/WorldShareCard';
 import { UserLink } from '../components/UserLink';
+import { RichTextEditor } from '../components/RichTextEditor';
+import { MarkdownRenderer } from '../components/MarkdownRenderer';
 import { WorldMap } from './WorldMap';
 import { WorldGallery } from './WorldGallery';
 import { WorldWorkboard } from './WorldWorkBoard';
@@ -120,6 +122,7 @@ export function WorldView() {
   const [showTimelineForm, setShowTimelineForm] = useState(false);
   const [editingTimelineEntry, setEditingTimelineEntry] = useState<TimelineEntry | null>(null);
   const [expandedCategories, setExpandedCategories] = useState<{ [key: string]: boolean }>({});
+  const [showAllRecords, setShowAllRecords] = useState(false);
   const [forkData, setForkData] = useState({
     title: '',
     description: '',
@@ -595,12 +598,18 @@ export function WorldView() {
 
         case 'records': {
           // Load world records (no user profiles needed here)
-          const { data: recordsData, error: recordsError } = await supabase
+          const query = supabase
             .from('world_records')
             .select('*')
             .eq('world_id', worldId)
-            .order('created_at', { ascending: false })
-            .limit(50);
+            .order('created_at', { ascending: false });
+
+          // Only apply limit if not showing all records
+          if (!showAllRecords) {
+            query.limit(50);
+          }
+
+          const { data: recordsData, error: recordsError } = await query;
 
           if (recordsError) throw recordsError;
           setWorldRecords(recordsData || []);
@@ -1063,6 +1072,34 @@ export function WorldView() {
     }));
   };
 
+  const toggleShowAllRecords = async () => {
+    const newShowAllRecords = !showAllRecords;
+    setShowAllRecords(newShowAllRecords);
+    
+    // Reload records with new setting - use the new value directly
+    if (!worldId) return;
+
+    try {
+      const query = supabase
+        .from('world_records')
+        .select('*')
+        .eq('world_id', worldId)
+        .order('created_at', { ascending: false });
+
+      // Only apply limit if NOT showing all records
+      if (!newShowAllRecords) {
+        query.limit(50);
+      }
+
+      const { data: recordsData, error: recordsError } = await query;
+
+      if (recordsError) throw recordsError;
+      setWorldRecords(recordsData || []);
+    } catch (error) {
+      console.error('Error loading records:', error);
+    }
+  };
+
   // Group world records by category
   const recordsByCategory = worldRecords.reduce((acc, record) => {
     if (!acc[record.category]) {
@@ -1343,7 +1380,7 @@ export function WorldView() {
                     className="block p-3 hover:bg-gray-700 rounded-lg transition-colors"
                   >
                     <h4 className="text-white font-medium text-sm mb-1">{post.title}</h4>
-                    <p className="text-gray-300 text-xs mb-2 line-clamp-2">{truncateText(post.content, 80)}</p>                    <div className="flex justify-between items-center text-xs text-gray-400">
+                    <MarkdownRenderer content={truncateText(post.content, 80)} className="text-gray-300 text-xs mb-2 line-clamp-2" />                    <div className="flex justify-between items-center text-xs text-gray-400">
                       <UserLink userId={post.author.id} username={post.author.username} className="text-xs" />
                       <div className="flex items-center space-x-2">
                         <span>{post.comments_count} replies</span>
@@ -1369,7 +1406,8 @@ export function WorldView() {
               <div className="space-y-3">
                 {questions.slice(0, 3).map((question) => (
                   <div key={question.id} className="p-3">
-                    <p className="text-gray-200 text-sm leading-relaxed mb-2">{question.question_text}</p>                    <div className="flex justify-between items-center text-xs text-gray-400">
+                    <MarkdownRenderer content={question.question_text} className="text-gray-200 text-sm leading-relaxed mb-2" />
+                    <div className="flex justify-between items-center text-xs text-gray-400">
                       <UserLink userId={question.author.id} username={question.author.username} className="text-xs" />
                       <div className="flex items-center space-x-1">
                         <ArrowUp className="h-3 w-3" />
@@ -1392,9 +1430,8 @@ export function WorldView() {
               <div className="space-y-3">
                 {canonScrolls.slice(0, 3).map((scroll) => (
                   <div key={scroll.id} className="p-3 rounded-lg">
-                    <p className="text-gray-200 text-sm leading-relaxed mb-2">
-                      {truncateText(scroll.scroll_text, 100)}
-                    </p>                    <div className="flex justify-between items-center text-xs text-gray-400">
+                    <MarkdownRenderer content={truncateText(scroll.scroll_text, 100)} className="text-gray-200 text-sm leading-relaxed mb-2" />
+                    <div className="flex justify-between items-center text-xs text-gray-400">
                       <UserLink userId={scroll.author.id} username={scroll.author.username} className="text-xs" />
                       <span className="text-green-400 font-medium">Canon</span>
                     </div>
@@ -1421,12 +1458,13 @@ export function WorldView() {
                     placeholder="Post title..."
                     className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                   />
-                  <textarea
+                  <RichTextEditor
                     value={newPost.content}
-                    onChange={(e) => setNewPost(prev => ({ ...prev, content: e.target.value }))}
+                    onChange={(value) => setNewPost(prev => ({ ...prev, content: value }))}
                     placeholder="What would you like to discuss about this world?"
                     rows={4}
-                    className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none"
+                    className="w-full"
+                    maxLength={5000}
                   />
                   <div className="flex justify-end">
                     <button
@@ -1475,9 +1513,7 @@ export function WorldView() {
                     <h3 className="text-lg sm:text-xl font-semibold text-white mb-3 hover:text-indigo-400 transition-colors break-words">
                       {post.title}
                     </h3>
-                    <p className="text-gray-200 leading-relaxed mb-4 break-words">
-                      {truncateText(post.content, 200)}
-                    </p>
+                    <MarkdownRenderer content={truncateText(post.content, 200)} className="text-gray-200 leading-relaxed mb-4 break-words" />
                   </Link>
 
                   <div className="flex items-center justify-between pt-4 border-t border-gray-700">
@@ -1514,27 +1550,25 @@ export function WorldView() {
             {user && userRole && (
               <div className="bg-gray-800 rounded-lg p-4 sm:p-6">
                 <h3 className="text-lg font-semibold text-white mb-4">Ask a Question</h3>
-                <div className="flex flex-col sm:flex-row gap-3">
-                  <input
-                    type="text"
+                <div className="space-y-4">
+                  <RichTextEditor
                     value={newQuestion}
-                    onChange={(e) => setNewQuestion(e.target.value)}
-                    placeholder="What paradox would you like to explore?"
-                    className="flex-1 px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                    onKeyPress={(e) => {
-                      if (e.key === 'Enter' && newQuestion.trim()) {
-                        submitQuestion();
-                      }
-                    }}
+                    onChange={(value) => setNewQuestion(value)}
+                    placeholder="What paradox would you like to explore? You can use formatting to make your question clearer..."
+                    rows={3}
+                    className="w-full"
+                    maxLength={2000}
                   />
-                  <button
-                    onClick={submitQuestion}
-                    disabled={!newQuestion.trim()}
-                    className="flex items-center justify-center px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
-                  >
-                    <Send className="h-4 w-4 mr-2" />
-                    Ask
-                  </button>
+                  <div className="flex justify-end">
+                    <button
+                      onClick={submitQuestion}
+                      disabled={!newQuestion.trim()}
+                      className="flex items-center px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+                    >
+                      <Send className="h-4 w-4 mr-2" />
+                      Ask Question
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
@@ -1567,10 +1601,13 @@ export function WorldView() {
                       />
                     </div>
                   </div>
-                  <h4 className="text-white font-medium mb-3 leading-relaxed break-words">{question.question_text}</h4>
+                  <MarkdownRenderer content={question.question_text} className="text-white font-medium mb-3 leading-relaxed break-words" />
                   {question.answer && (
                     <div className="mt-4 p-4 bg-gray-700 rounded-lg border-l-4 border-indigo-500">
-                      <p className="text-gray-200 leading-relaxed">{question.answer}</p>
+                      <div className="mb-2">
+                        <span className="text-sm text-indigo-400 font-medium">Answer:</span>
+                      </div>
+                      <MarkdownRenderer content={question.answer} className="text-gray-200 leading-relaxed" />
                     </div>
                   )}
                 </div>
@@ -1591,12 +1628,13 @@ export function WorldView() {
               <div className="bg-gray-800 rounded-lg p-4 sm:p-6">
                 <h3 className="text-lg font-semibold text-white mb-4">Submit a Scroll</h3>
                 <div className="space-y-3">
-                  <textarea
+                  <RichTextEditor
                     value={newScroll}
-                    onChange={(e) => setNewScroll(e.target.value)}
+                    onChange={(value) => setNewScroll(value)}
                     placeholder="Share your contribution to this world's lore..."
                     rows={4}
-                    className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none"
+                    className="w-full"
+                    maxLength={10000}
                   />
                   <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
                     <p className="text-gray-400 text-sm">
@@ -1637,7 +1675,7 @@ export function WorldView() {
                       Canon
                     </span>
                   </div>
-                  <p className="text-gray-200 leading-relaxed break-words">{scroll.scroll_text}</p>
+                  <MarkdownRenderer content={scroll.scroll_text} className="text-gray-200 leading-relaxed break-words" />
                 </div>
               ))}
               {canonScrolls.length === 0 && (
@@ -1652,8 +1690,26 @@ export function WorldView() {
 
         {activeTab === 'records' && (
           <div className="space-y-6">
-            {isCreator && (
-              <div className="flex justify-end">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <div className="flex items-center space-x-4">
+                <button
+                  onClick={toggleShowAllRecords}
+                  className="flex items-center px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition-colors font-medium"
+                >
+                  {showAllRecords ? 'Show Paginated (50)' : `Show All (${worldRecordsCount})`}
+                </button>
+                {!showAllRecords && worldRecordsCount > 50 && (
+                  <span className="text-sm text-gray-400">
+                    Showing 50 of {worldRecordsCount} records
+                  </span>
+                )}
+                {showAllRecords && (
+                  <span className="text-sm text-green-400">
+                    Showing all {worldRecordsCount} records
+                  </span>
+                )}
+              </div>
+              {isCreator && (
                 <button
                   onClick={() => setShowRecordForm(true)}
                   className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium"
@@ -1661,8 +1717,8 @@ export function WorldView() {
                   <Plus className="h-4 w-4 mr-2" />
                   Create Record
                 </button>
-              </div>
-            )}
+              )}
+            </div>
 
             {Object.keys(recordsByCategory).length > 0 ? (
               <div className="space-y-4">
@@ -1820,11 +1876,13 @@ export function WorldView() {
                 <label className="block text-sm font-medium text-gray-300 mb-2">
                   Description *
                 </label>
-                <textarea
+                <RichTextEditor
                   value={forkData.description}
-                  onChange={(e) => updateForkData('description', e.target.value)}
+                  onChange={(value) => updateForkData('description', value)}
                   rows={3}
-                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none"
+                  className="w-full"
+                  maxLength={2000}
+                  placeholder="Describe your fork and what makes it unique..."
                 />
               </div>
 
@@ -1900,12 +1958,14 @@ export function WorldView() {
                           placeholder="Role name"
                           className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                         />
-                        <textarea
+                        <RichTextEditor
                           value={role.description}
-                          onChange={(e) => updateForkRole(index, 'description', e.target.value)}
+                          onChange={(value) => updateForkRole(index, 'description', value)}
                           placeholder="Role description"
                           rows={2}
-                          className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none"
+                          className="w-full text-sm"
+                          maxLength={500}
+                          showPreview={false}
                         />
                       </div>
                     </div>

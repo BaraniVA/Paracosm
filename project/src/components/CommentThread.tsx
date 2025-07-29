@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { CommentItem } from './CommentItem';
 import { Send } from 'lucide-react';
+import { RichTextEditor } from './RichTextEditor';
 
 interface CommunityComment {
   id: string;
@@ -91,13 +92,6 @@ export function CommentThread({
     }
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSubmitTopLevelComment();
-    }
-  };
-
   const threadedComments = buildCommentTree(comments);
 
   return (
@@ -131,13 +125,13 @@ export function CommentThread({
       {/* New Comment Input */}
       {user && (
         <div className="space-y-3">
-          <textarea
+          <RichTextEditor
             value={newComment}
-            onChange={(e) => setNewComment(e.target.value)}
-            onKeyPress={handleKeyPress}
+            onChange={(value) => setNewComment(value)}
             placeholder="Add a comment..."
             rows={3}
-            className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none"
+            className="w-full"
+            maxLength={2000}
             disabled={isSubmitting}
           />
           <div className="flex justify-end">

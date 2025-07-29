@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { X, Edit, Save, Trash2 } from 'lucide-react';
+import { MarkdownRenderer } from './MarkdownRenderer';
+import { RichTextEditor } from './RichTextEditor';
 
 interface WorldRecord {
   id: string;
@@ -144,19 +146,16 @@ export function WorldRecordModal({ record, isCreator, onClose, onUpdate, onDelet
 
         <div className="space-y-4">
           {isEditing ? (
-            <textarea
+            <RichTextEditor
               value={editData.description}
-              onChange={(e) => setEditData(prev => ({ ...prev, description: e.target.value }))}
+              onChange={(value) => setEditData(prev => ({ ...prev, description: value }))}
               rows={20}
-              className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+              className="w-full"
               placeholder="Enter detailed description..."
+              maxLength={50000}
             />
           ) : (
-            <div className="prose prose-invert max-w-none">
-              <div className="text-gray-200 leading-relaxed whitespace-pre-wrap">
-                {record.description}
-              </div>
-            </div>
+            <MarkdownRenderer content={record.description} className="text-gray-200 leading-relaxed" />
           )}
 
           {record.linked_to_type && (

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Save, X, Plus, Minus, EyeOff } from 'lucide-react';
 import { EraAutocomplete } from './EraAutocomplete';
+import { RichTextEditor } from './RichTextEditor';
 
 interface CreateEditTimelineEntryFormProps {
   worldId: string;
@@ -220,13 +221,13 @@ export function CreateEditTimelineEntryForm({
             <label className="block text-sm font-medium text-gray-300 mb-2">
               Description *
             </label>
-            <textarea
+            <RichTextEditor
               value={formData.description}
-              onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+              onChange={(value) => setFormData(prev => ({ ...prev, description: value }))}
               rows={4}
-              className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+              className="w-full"
               placeholder="Describe what happened during this era..."
-              required
+              maxLength={10000}
             />
           </div>          <div>
             <label className="block text-sm font-medium text-gray-300 mb-3">
