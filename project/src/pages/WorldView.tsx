@@ -1479,6 +1479,20 @@ export function WorldView() {
                 </div>
               </div>
             )}
+            {!user && (
+              <div className="bg-indigo-900/40 border border-indigo-700 rounded-lg p-4 sm:p-6 flex flex-col sm:flex-row sm:items-center gap-4">
+                <div className="text-sm text-indigo-200 flex-1">
+                  Viewing community posts in read-only mode. Sign up to start a discussion.
+                </div>
+                <button
+                  onClick={() => navigate('/signup')}
+                  className="px-5 py-2 text-sm font-medium rounded-md bg-indigo-600 hover:bg-indigo-700 text-white transition"
+                  type="button"
+                >
+                  Create a free account
+                </button>
+              </div>
+            )}
 
             <div className="space-y-4">
               {communityPosts.map((post) => (
@@ -1572,6 +1586,25 @@ export function WorldView() {
                 </div>
               </div>
             )}
+            {!user && (
+              <div className="bg-indigo-900/40 border border-indigo-700 rounded-lg p-4 sm:p-6 flex flex-col sm:flex-row sm:items-center gap-4">
+                <div className="text-sm text-indigo-200 flex-1">
+                  You can read existing questions in this world. Sign up and join to ask your own.
+                </div>
+                <button
+                  onClick={() => navigate('/signup')}
+                  className="px-5 py-2 text-sm font-medium rounded-md bg-indigo-600 hover:bg-indigo-700 text-white transition"
+                  type="button"
+                >
+                  Sign Up
+                </button>
+              </div>
+            )}
+            {user && !userRole && (
+              <div className="bg-gray-800/70 border border-gray-700 rounded-lg p-4 text-sm text-gray-300">
+                Join a role in this world to ask questions. (Read-only until you join.)
+              </div>
+            )}
 
             <div className="space-y-4">
               {questions.map((question) => (
@@ -1652,6 +1685,25 @@ export function WorldView() {
                 </div>
               </div>
             )}
+            {!user && (
+              <div className="bg-indigo-900/40 border border-indigo-700 rounded-lg p-4 sm:p-6 flex flex-col sm:flex-row sm:items-center gap-4">
+                <div className="text-sm text-indigo-200 flex-1">
+                  Reading canon lore in read-only mode. Sign up to submit new scrolls.
+                </div>
+                <button
+                  onClick={() => navigate('/signup')}
+                  className="px-5 py-2 text-sm font-medium rounded-md bg-indigo-600 hover:bg-indigo-700 text-white transition"
+                  type="button"
+                >
+                  Create Account
+                </button>
+              </div>
+            )}
+            {user && !userRole && (
+              <div className="bg-gray-800/70 border border-gray-700 rounded-lg p-4 text-sm text-gray-300">
+                Join a role in this world to submit lore. (Read-only until you join.)
+              </div>
+            )}
 
             <div className="space-y-4">
               {canonScrolls.map((scroll) => (
@@ -1709,7 +1761,7 @@ export function WorldView() {
                   </span>
                 )}
               </div>
-              {isCreator && (
+              {isCreator && user && (
                 <button
                   onClick={() => setShowRecordForm(true)}
                   className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium"
@@ -1719,6 +1771,20 @@ export function WorldView() {
                 </button>
               )}
             </div>
+            {!user && (
+              <div className="bg-indigo-900/40 border border-indigo-700 rounded-lg p-4 sm:p-6 flex flex-col sm:flex-row sm:items-center gap-4">
+                <div className="text-sm text-indigo-200 flex-1">
+                  Viewing world records in read-only mode. Sign up (and if creator, log in) to add or edit records.
+                </div>
+                <button
+                  onClick={() => navigate('/signup')}
+                  className="px-5 py-2 text-sm font-medium rounded-md bg-indigo-600 hover:bg-indigo-700 text-white transition"
+                  type="button"
+                >
+                  Create Account
+                </button>
+              </div>
+            )}
 
             {Object.keys(recordsByCategory).length > 0 ? (
               <div className="space-y-4">
@@ -1774,19 +1840,61 @@ export function WorldView() {
       {/* Other Main Tabs */}
       {mainTab === 'map' && (
         <div>
-          <WorldMap worldId={worldId!} isCreator={isCreator} />
+          {!user && (
+            <div className="bg-indigo-900/40 border border-indigo-700 rounded-lg p-4 sm:p-6 flex flex-col sm:flex-row sm:items-center gap-4 mb-4">
+              <div className="text-sm text-indigo-200 flex-1">
+                Viewing map locations in read-only mode. Sign up to interact, add or modify locations.
+              </div>
+              <button
+                onClick={() => navigate('/signup')}
+                className="px-5 py-2 text-sm font-medium rounded-md bg-indigo-600 hover:bg-indigo-700 text-white transition"
+                type="button"
+              >
+                Create Account
+              </button>
+            </div>
+          )}
+          <WorldMap worldId={worldId!} isCreator={!!user && isCreator} />
         </div>
       )}
 
       {mainTab === 'gallery' && (
         <div>
-          <WorldGallery worldId={worldId!} isCreator={isCreator} />
+          {!user && (
+            <div className="bg-indigo-900/40 border border-indigo-700 rounded-lg p-4 sm:p-6 flex flex-col sm:flex-row sm:items-center gap-4 mb-4">
+              <div className="text-sm text-indigo-200 flex-1">
+                Viewing gallery images in read-only mode. Sign up to upload images.
+              </div>
+              <button
+                onClick={() => navigate('/signup')}
+                className="px-5 py-2 text-sm font-medium rounded-md bg-indigo-600 hover:bg-indigo-700 text-white transition"
+                type="button"
+              >
+                Create Account
+              </button>
+            </div>
+          )}
+          <WorldGallery worldId={worldId!} isCreator={!!user && isCreator} />
         </div>
       )}
 
       {mainTab === 'workboard' && (
         <div>
-          <WorldWorkboard worldId={worldId!} isCreator={isCreator} />
+          {!user && (
+            <div className="bg-indigo-900/40 border border-indigo-700 rounded-lg p-4 sm:p-6 flex flex-col sm:flex-row sm:items-center gap-4 mb-4">
+              <div className="text-sm text-indigo-200 flex-1">
+                Viewing workboard in read-only mode. Sign up (and become a member) to post announcements or tasks.
+              </div>
+              <button
+                onClick={() => navigate('/signup')}
+                className="px-5 py-2 text-sm font-medium rounded-md bg-indigo-600 hover:bg-indigo-700 text-white transition"
+                type="button"
+              >
+                Join now
+              </button>
+            </div>
+          )}
+          <WorldWorkboard worldId={worldId!} isCreator={!!user && isCreator} />
         </div>
       )}
 

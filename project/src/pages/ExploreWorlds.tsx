@@ -257,6 +257,21 @@ export function ExploreWorlds() {
         </p>
       </div>
 
+      {/* Read-only notice for visitors */}
+      {!user && (
+        <div className="bg-indigo-900/40 border border-indigo-700 rounded-lg p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <p className="text-sm text-indigo-200">
+            You are exploring in read-only mode. Sign up to create worlds, post lore, or ask questions.
+          </p>
+          <Link
+            to="/signup"
+            className="px-5 py-2 text-sm font-medium rounded-md bg-indigo-600 hover:bg-indigo-700 text-white transition"
+          >
+            Create a free account
+          </Link>
+        </div>
+      )}
+
       {/* Search and Filters */}
       <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
         <div className="flex flex-col sm:flex-row gap-4">
@@ -351,7 +366,7 @@ export function ExploreWorlds() {
           {filteredWorlds.map((world) => (
             <Link
               key={world.id}
-              to={user ? `/world/${world.id}` : '/login'}
+              to={`/world/${world.id}`}  // was user ? `/world/${world.id}` : '/login'
               className="group block bg-gray-800 rounded-xl p-6 border border-gray-700 hover:border-indigo-500 transition-all duration-200 transform hover:scale-105"
             >
               {/* World Header */}
@@ -413,7 +428,7 @@ export function ExploreWorlds() {
                 </div>
                 
                 <div className="text-indigo-400 text-sm font-medium group-hover:text-indigo-300 transition-colors">
-                  {user ? 'Explore →' : 'Login to Explore →'}
+                  {user ? 'Explore →' : 'Read Only →'}
                 </div>
               </div>
             </Link>

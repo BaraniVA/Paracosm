@@ -53,7 +53,10 @@ export function WorldMap({ worldId, isCreator }: WorldMapProps) {
   const [showGrid, setShowGrid] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [selectedLocation, setSelectedLocation] = useState<string | null>(null);
-  const [mapDimensions, setMapDimensions] = useState({ width: 0, height: 0 });
+  // We used to cache mapDimensions, but relying on ResizeObserver caused 0x0 races in production.
+  // Instead we compute container dimensions on demand (clientWidth/Height) for robust positioning.
+  // A mounted flag forces a post-mount render so refs are populated.
+  const [mounted, setMounted] = useState(false);
   const [isZooming, setIsZooming] = useState(false);
   const zoomTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [lastClickTime, setLastClickTime] = useState(0);
@@ -240,20 +243,14 @@ export function WorldMap({ worldId, isCreator }: WorldMapProps) {
     // ensuring location positions are recalculated correctly
   }, [zoom, pan]);
 
-  // Track map container dimensions
+  // Force a re-render after mount so ref dimensions are non-null for marker positioning.
   useEffect(() => {
-    const updateDimensions = () => {
-      if (mapContainerRef.current) {
-        const rect = mapContainerRef.current.getBoundingClientRect();
-        setMapDimensions({ width: rect.width, height: rect.height });
-      }
-    };
-
-    updateDimensions();
-    window.addEventListener('resize', updateDimensions);
-    
-    return () => window.removeEventListener('resize', updateDimensions);
-  }, [isFullscreen]);
+    if (!mounted) {
+      // Next tick to ensure layout done
+      const id = requestAnimationFrame(() => setMounted(true));
+      return () => cancelAnimationFrame(id);
+    }
+  }, [mounted]);
 
   // Cleanup zoom timeout on unmount
   useEffect(() => {
@@ -627,23 +624,20 @@ export function WorldMap({ worldId, isCreator }: WorldMapProps) {
 
   const focusOnLocation = (location: MapLocation) => {
     setSelectedLocation(location.id);
-    
-    if (mapDimensions.width === 0 || mapDimensions.height === 0) return;
-    
-    // Calculate the center position for the location
-    const centerX = mapDimensions.width / 2;
-    const centerY = mapDimensions.height / 2;
-    
-    // Calculate where the location would be at current zoom
-    const locationX = (location.x_coordinate / 100) * mapDimensions.width * zoom;
-    const locationY = (location.y_coordinate / 100) * mapDimensions.height * zoom;
-    
-    // Calculate pan needed to center the location
+    const container = mapContainerRef.current;
+    if (!container) return;
+    const width = container.clientWidth || 0;
+    const height = container.clientHeight || 0;
+    if (width === 0 || height === 0) return;
+
+    const centerX = width / 2;
+    const centerY = height / 2;
+    const locationX = (location.x_coordinate / 100) * width * zoom;
+    const locationY = (location.y_coordinate / 100) * height * zoom;
     const targetPanX = centerX - locationX;
     const targetPanY = centerY - locationY;
-    
     setPan({ x: targetPanX, y: targetPanY });
-    setZoom(Math.max(zoom, 1.5)); // Ensure we're zoomed in enough to see details
+    setZoom(Math.max(zoom, 1.5));
   };
 
   const visibleLocations = locations.filter(location => 
@@ -918,10 +912,12 @@ export function WorldMap({ worldId, isCreator }: WorldMapProps) {
 
             {/* Locations - Positioned relative to map */}
             {visibleLocations.map((location) => {
-              // Calculate absolute position considering zoom and pan
-              const x = (location.x_coordinate / 100) * mapDimensions.width * zoom + pan.x;
-              const y = (location.y_coordinate / 100) * mapDimensions.height * zoom + pan.y;
-              
+              // Compute container size on demand (robust vs cached state races)
+              const container = mapContainerRef.current;
+              const width = container?.clientWidth || 0;
+              const height = container?.clientHeight || 0;
+              const x = (location.x_coordinate / 100) * width * zoom + pan.x;
+              const y = (location.y_coordinate / 100) * height * zoom + pan.y;
               return (
                 <div
                   key={location.id}
