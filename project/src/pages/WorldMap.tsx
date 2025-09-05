@@ -242,17 +242,34 @@ export function WorldMap({ worldId, isCreator }: WorldMapProps) {
 
   // Track map container dimensions
   useEffect(() => {
+    if (!mapContainerRef.current) return;
+
+    const el = mapContainerRef.current;
+
     const updateDimensions = () => {
-      if (mapContainerRef.current) {
-        const rect = mapContainerRef.current.getBoundingClientRect();
+      const rect = el.getBoundingClientRect();
+      // Only update when we have real dimensions
+      if (rect.width > 0 && rect.height > 0) {
         setMapDimensions({ width: rect.width, height: rect.height });
       }
     };
 
-    updateDimensions();
+    // Initial measure (RAF to ensure layout settled)
+    requestAnimationFrame(updateDimensions);
+
+    // Observe size changes
+    const ro = new ResizeObserver(() => {
+      updateDimensions();
+    });
+    ro.observe(el);
+
+    // Fallback: also listen to window resize
     window.addEventListener('resize', updateDimensions);
-    
-    return () => window.removeEventListener('resize', updateDimensions);
+
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', updateDimensions);
+    };
   }, [isFullscreen]);
 
   // Cleanup zoom timeout on unmount

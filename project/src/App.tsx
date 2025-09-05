@@ -66,15 +66,15 @@ function App() {
             />
             <Route
               path="/world/:worldId"
-              element={user ? <WorldView /> : <Navigate to="/login" />}
+              element={<WorldView />}
             />
             <Route
               path="/world/:worldId/community/:postId"
-              element={user ? <CommunityPostDetail /> : <Navigate to="/login" />}
+              element={<CommunityPostDetail />}
             />
             <Route
               path="/profile/:userId"
-              element={user ? <Profile /> : <Navigate to="/login" />}
+              element={<Profile />}
             />
             <Route
               path="/profile"
